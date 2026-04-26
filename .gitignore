@@ -1,0 +1,12 @@
+build/
+out/
+.vs/
+.vscode/.cache/
+*.user
+*.suo
+*.pdb
+*.obj
+*.dll
+*.exe
+*.msi
+.cache/

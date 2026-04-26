@@ -1,0 +1,13 @@
+{
+  "name": "wavepreview-for-explorer",
+  "version-string": "0.1.0",
+  "dependencies": [
+    "sqlite3",
+    "libsndfile",
+    "miniaudio",
+    {
+      "name": "gtest",
+      "default-features": true
+    }
+  ]
+}

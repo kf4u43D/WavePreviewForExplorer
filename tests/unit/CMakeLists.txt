@@ -1,0 +1,7 @@
+find_package(GTest CONFIG QUIET)
+if(GTest_FOUND)
+  add_executable(wpv-unit-tests waveform_generator_tests.cpp)
+  target_link_libraries(wpv-unit-tests PRIVATE WavePreviewAudioEngine GTest::gtest_main)
+  include(GoogleTest)
+  gtest_discover_tests(wpv-unit-tests)
+endif()
