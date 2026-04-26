@@ -1,93 +1,102 @@
-# WavePreview for Explorer
+﻿## 🟦 WavePreview for Explorer
 
-Extension native Windows pour préécouter et visualiser les fichiers audio directement dans l’Explorateur Windows.
+**Audio preview and waveform thumbnails directly inside Windows Explorer.**
 
-## Objectif
+WavePreview for Explorer is a native Windows shell extension designed to enhance the way audio files are browsed. It brings fast preview, clean waveform visualization, and essential audio metadata directly into the Explorer interface — without launching any external application.
 
-Le projet vise à fournir :
+---
 
-- un **Preview Handler** pour le volet de prévisualisation de l’Explorateur ;
-- un **Thumbnail Provider** pour afficher des miniatures waveform ;
-- un **Property Handler** optionnel pour exposer durée, sample rate, bit depth, canaux, codec, BPM, etc. ;
-- une application de réglages ;
-- un cache local rapide et robuste.
+## ✨ Features
 
-La priorité absolue est la stabilité de l’Explorateur Windows. Les traitements lourds doivent être isolés du composant shell.
+### 🔊 Preview Handler
 
-## État du workspace
+* Instant audio playback in the Explorer preview pane
+* Play / pause / seek
+* Clickable waveform navigation
+* Clean, readable waveform display
+* Technical info: duration, sample rate, bit depth, channels
 
-Ce dépôt est un **starter kit de développement**. Il contient :
+### 🖼️ Waveform Thumbnails *(planned)*
 
-- documentation produit complète ;
-- architecture technique ;
-- superprompt pour Codex sous VS Code ;
-- squelette C++/CMake ;
-- manifest vcpkg ;
-- scripts PowerShell d’installation des dépendances ;
-- placeholders pour Preview Handler, Thumbnail Provider, Property Handler, cache et moteur audio ;
-- base de tests.
+* Visual identification of audio files directly in folders
+* Lightweight waveform rendering
+* Smart caching for performance
 
-Le code fourni est volontairement minimal : il sert de base propre pour lancer le développement, pas de shell extension prête à enregistrer en production.
+### 📊 Audio Metadata *(planned)*
 
-## Prérequis Windows
+* Basic: format, duration, bitrate, channels
+* Advanced: BPM, key detection, RMS / peak *(future)*
 
-- Windows 10 ou Windows 11 64-bit
-- Visual Studio 2022 avec workload **Desktop development with C++**
-- Git
-- CMake récent
-- PowerShell 7 recommandé
-- vcpkg, installé via `scripts/bootstrap-dev.ps1`
-- WiX Toolset, optionnel pour l’installateur
+---
 
-## Démarrage rapide
+## 🎯 Design Goals
 
-Depuis PowerShell :
+* **Fast** – minimal latency, even on large sample libraries
+* **Stable** – no impact on Windows Explorer reliability
+* **Minimal** – focused on browsing, not editing
+* **Professional** – clean UI, accurate technical information
+* **Local-first** – no cloud, no telemetry
 
-```powershell
-cd WavePreviewForExplorer
-./scripts/bootstrap-dev.ps1
-./scripts/configure.ps1
-./scripts/build.ps1
-```
+---
 
-Ou manuellement :
+## 🧱 Architecture
 
-```powershell
-git clone https://github.com/microsoft/vcpkg C:/dev/vcpkg
-C:/dev/vcpkg/bootstrap-vcpkg.bat
-cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_TOOLCHAIN_FILE=C:/dev/vcpkg/scripts/buildsystems/vcpkg.cmake
-cmake --build build --config Debug
-```
+* Native **C++ Windows Shell Extension (COM)**
+* Preview Handler + Thumbnail Provider + optional Property Handler
+* Lightweight **audio engine layer** (Media Foundation / libsndfile / miniaudio)
+* **SQLite-based cache** for waveform and metadata
+* Separate **Settings app** for configuration
 
-## Dépendances prévues
+---
 
-Déclarées dans `vcpkg.json` :
+## 📦 Supported Formats
 
-- `sqlite3` : index du cache ;
-- `libsndfile` : lecture/analyse WAV, AIFF, FLAC ;
-- `miniaudio` : couche audio légère, lecture et décodage possible ;
-- `gtest` : tests unitaires.
+**Initial support:**
 
-Media Foundation et Direct2D sont fournis par le SDK Windows.
+* WAV (PCM / float)
+* FLAC
+* AIFF
+* MP3
 
-## Principes de développement
+**Planned:**
 
-1. Ne jamais bloquer l’Explorateur.
-2. Ne jamais analyser récursivement un disque sans action explicite.
-3. Préférer les timeouts courts et les résultats approximatifs rapides.
-4. Ne pas faire de UI lourde dans le Preview Handler.
-5. Prévoir une désinstallation propre dès le début.
-6. Tout composant shell doit être conçu comme potentiellement hostile aux fichiers corrompus.
+* OGG / Opus
+* AAC / M4A
+* CAF
+* Extended metadata formats (BWF, loops, etc.)
 
-## Documentation
+---
 
-Voir :
+## 🚀 Use Cases
 
-- `docs/product-spec.md`
-- `docs/architecture.md`
-- `docs/shell-integration.md`
-- `docs/dependency-setup.md`
-- `docs/cache-format.md`
-- `docs/ui-guidelines.md`
-- `docs/testing-plan.md`
-- `docs/SUPERPROMPT_CODEX.md`
+* Browsing large sample libraries
+* Sound design workflows
+* Field recording review
+* Fast audio file triage
+* Identifying files without opening a DAW
+
+---
+
+## ⚙️ Development
+
+This project is designed to be built with:
+
+* C++ (modern standard)
+* CMake
+* vcpkg (dependency management)
+* Visual Studio / VS Code
+
+See the `/docs` folder and `CODEX_PROMPT.md` for full setup instructions and development guidance.
+
+---
+
+## ⚠️ Notes
+
+This project involves Windows shell integration. Stability and performance are critical.
+All heavy processing is designed to be isolated from Explorer whenever possible.
+
+---
+
+## 📄 License
+
+MIT
