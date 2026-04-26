@@ -1,0 +1,1 @@
+#include "ThumbnailProvider.h"
