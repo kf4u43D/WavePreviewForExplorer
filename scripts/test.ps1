@@ -1,2 +1,13 @@
+param(
+  [string]$BuildDir = "build",
+  [string]$Configuration = "Debug"
+)
+
 $ErrorActionPreference = "Stop"
-ctest --test-dir build -C Debug --output-on-failure
+$repoRoot = Split-Path -Parent $PSScriptRoot
+$buildPath = if ([System.IO.Path]::IsPathRooted($BuildDir)) { $BuildDir } else { Join-Path $repoRoot $BuildDir }
+
+ctest --test-dir $buildPath -C $Configuration --output-on-failure
+if ($LASTEXITCODE -ne 0) {
+  exit $LASTEXITCODE
+}

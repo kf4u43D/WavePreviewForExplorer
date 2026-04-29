@@ -5,6 +5,8 @@ add_library(WavePreviewAudioEngine STATIC
   WaveformData.h
   Waveform/WaveformGenerator.h
   Waveform/WaveformGenerator.cpp
+  Render/WaveformBitmapRenderer.h
+  Render/WaveformBitmapRenderer.cpp
   Decoders/WavDecoder.h
   Decoders/WavDecoder.cpp
   Metadata/MetadataReader.h
