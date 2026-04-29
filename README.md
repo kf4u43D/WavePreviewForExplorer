@@ -1,102 +1,108 @@
-﻿## 🟦 WavePreview for Explorer
+# WavePreview for Explorer
 
-**Audio preview and waveform thumbnails directly inside Windows Explorer.**
+[![Build](https://github.com/kf4u43D/WavePreviewForExplorer/actions/workflows/build.yml/badge.svg)](https://github.com/kf4u43D/WavePreviewForExplorer/actions/workflows/build.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-WavePreview for Explorer is a native Windows shell extension designed to enhance the way audio files are browsed. It brings fast preview, clean waveform visualization, and essential audio metadata directly into the Explorer interface — without launching any external application.
+WavePreview for Explorer is a native Windows Explorer extension for browsing audio samples faster.
 
----
+It adds waveform thumbnails and a preview pane with playback, metadata, and a larger waveform, without opening a DAW or media player.
 
-## ✨ Features
+![WavePreview running in Windows Explorer](docs/assets/explorer-preview.png)
 
-### 🔊 Preview Handler
+## Features
 
-* Instant audio playback in the Explorer preview pane
-* Play / pause / seek
-* Clickable waveform navigation
-* Clean, readable waveform display
-* Technical info: duration, sample rate, bit depth, channels
+- Waveform thumbnails in Windows Explorer.
+- Preview pane with file name, codec, duration, sample rate, bit depth, channels, and frame count.
+- Play/stop button inside the preview pane.
+- Optional Space key playback.
+- Optional auto-play when a file is selected.
+- Per-user installer. No administrator rights required.
 
-### 🖼️ Waveform Thumbnails *(planned)*
+## Current Status
 
-* Visual identification of audio files directly in folders
-* Lightweight waveform rendering
-* Smart caching for performance
+This is an early Windows build focused on stable Explorer integration.
 
-### 📊 Audio Metadata *(planned)*
+Current stable target:
 
-* Basic: format, duration, bitrate, channels
-* Advanced: BPM, key detection, RMS / peak *(future)*
+- WAV / WAVE files
+- PCM WAV metadata
+- waveform thumbnails
+- preview pane rendering
+- basic audio playback
 
----
+More formats can be added later once the shell extension path remains stable.
 
-## 🎯 Design Goals
+## Install
 
-* **Fast** – minimal latency, even on large sample libraries
-* **Stable** – no impact on Windows Explorer reliability
-* **Minimal** – focused on browsing, not editing
-* **Professional** – clean UI, accurate technical information
-* **Local-first** – no cloud, no telemetry
+1. Download the latest package from [Releases](https://github.com/kf4u43D/WavePreviewForExplorer/releases).
+2. Extract the zip file.
+3. Run `WavePreviewInstallerGui.exe`.
+4. Open Windows Explorer and enable the preview pane.
 
----
+The installer writes only per-user registry entries under `HKCU` and installs files under:
 
-## 🧱 Architecture
+```text
+%LOCALAPPDATA%\WavePreviewForExplorer
+```
 
-* Native **C++ Windows Shell Extension (COM)**
-* Preview Handler + Thumbnail Provider + optional Property Handler
-* Lightweight **audio engine layer** (Media Foundation / libsndfile / miniaudio)
-* **SQLite-based cache** for waveform and metadata
-* Separate **Settings app** for configuration
+Command line install is also available:
 
----
+```powershell
+.\WavePreviewInstaller.exe install --audio on --autoplay off --space-to-play on --restart-explorer
+```
 
-## 📦 Supported Formats
+See [docs/installer.md](docs/installer.md) for all installer options.
 
-**Initial support:**
+## Build From Source
 
-* WAV (PCM / float)
-* FLAC
-* AIFF
-* MP3
+Requirements:
 
-**Planned:**
+- Windows 10 or 11
+- Visual Studio 2022 Build Tools with C++
+- CMake
+- vcpkg
 
-* OGG / Opus
-* AAC / M4A
-* CAF
-* Extended metadata formats (BWF, loops, etc.)
+Build and test:
 
----
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\bootstrap-dev.ps1
+powershell -ExecutionPolicy Bypass -File scripts\full-build.ps1 -Configuration Release
+```
 
-## 🚀 Use Cases
+Create an installer package:
 
-* Browsing large sample libraries
-* Sound design workflows
-* Field recording review
-* Fast audio file triage
-* Identifying files without opening a DAW
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\package-installer.ps1 -Configuration Release
+```
 
----
+Development smoke test:
 
-## ⚙️ Development
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\verify-cli-render.ps1
+```
 
-This project is designed to be built with:
+## Useful Links
 
-* C++ (modern standard)
-* CMake
-* vcpkg (dependency management)
-* Visual Studio / VS Code
+- [Releases](https://github.com/kf4u43D/WavePreviewForExplorer/releases)
+- [Issues](https://github.com/kf4u43D/WavePreviewForExplorer/issues)
+- [Installer guide](docs/installer.md)
+- [Architecture notes](docs/architecture.md)
+- [Build workflow](.github/workflows/build.yml)
 
-See the `/docs` folder and `CODEX_PROMPT.md` for full setup instructions and development guidance.
+## Troubleshooting
 
----
+If Explorer does not update immediately, restart Explorer or sign out and back in.
 
-## ⚠️ Notes
+If a build cannot overwrite `WavePreviewShellExtension.dll`, Explorer or `prevhost.exe` is still using it. Close Explorer windows or run:
 
-This project involves Windows shell integration. Stability and performance are critical.
-All heavy processing is designed to be isolated from Explorer whenever possible.
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\rebuild-register-dev.ps1 -IncludePreviewHandler
+```
 
----
+If thumbnails do not appear, check that the file extension is registered and clear Explorer's thumbnail cache.
 
-## 📄 License
+## License
 
-MIT
+WavePreview for Explorer is released under the [MIT License](LICENSE).
+
+Dependencies keep their own licenses.
