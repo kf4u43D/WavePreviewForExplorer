@@ -15,6 +15,7 @@ add_subdirectory(tools/waveform-test-cli)
 add_subdirectory(tools/thumbnail-smoke-cli)
 add_subdirectory(tools/com-thumbnail-smoke-cli)
 add_subdirectory(tools/preview-smoke-cli)
+add_subdirectory(installer/native)
 
 if(WPV_BUILD_SHELL_EXTENSION)
   add_subdirectory(src/ShellExtension)

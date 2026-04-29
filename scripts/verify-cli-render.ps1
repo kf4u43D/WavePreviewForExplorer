@@ -7,6 +7,7 @@ $exePath = Join-Path $outDir "waveform-test-cli.exe"
 $thumbnailExePath = Join-Path $outDir "thumbnail-smoke-cli.exe"
 $comThumbnailExePath = Join-Path $outDir "com-thumbnail-smoke-cli.exe"
 $previewExePath = Join-Path $outDir "preview-smoke-cli.exe"
+$installerExePath = Join-Path $outDir "WavePreviewInstaller.exe"
 $shellDllPath = Join-Path $outDir "WavePreviewShellExtension-smoke.dll"
 $cmdPath = Join-Path $outDir "compile.cmd"
 $wavPath = Join-Path $outDir "verify-input-pcm16.wav"
@@ -88,6 +89,13 @@ cl /nologo /LD /std:c++20 /EHsc /DUNICODE /D_UNICODE /DNOMINMAX ^
   /Fo"$outDir\\" ^
   /Fe:"$shellDllPath" ^
   /link /DEF:"$repoRoot\src\ShellExtension\WavePreviewShellExtension.def" ole32.lib user32.lib gdi32.lib winmm.lib advapi32.lib
+if errorlevel 1 exit /b %errorlevel%
+cl /nologo /std:c++20 /EHsc /DUNICODE /D_UNICODE /DNOMINMAX ^
+  "$repoRoot\installer\native\main.cpp" ^
+  /Fo"$outDir\\" ^
+  /Fe:"$installerExePath" ^
+  /link advapi32.lib shell32.lib ole32.lib
+if errorlevel 1 exit /b %errorlevel%
 "@
 
 Set-Content -Path $cmdPath -Value $compileCommand -Encoding ASCII
@@ -110,6 +118,9 @@ if (!(Test-Path $previewExePath)) {
 if (!(Test-Path $shellDllPath)) {
   throw "Direct MSVC compile finished but did not produce $shellDllPath"
 }
+if (!(Test-Path $installerExePath)) {
+  throw "Direct MSVC compile finished but did not produce $installerExePath"
+}
 
 $dumpbinCommand = "call `"$vsDevCmd`" -arch=x64 >nul && dumpbin /nologo /exports `"$shellDllPath`""
 $exports = & cmd.exe /d /s /c $dumpbinCommand
@@ -122,6 +133,11 @@ foreach ($requiredExport in @("DllGetClassObject", "DllCanUnloadNow", "DllRegist
 & $exePath --help
 if ($LASTEXITCODE -ne 0) {
   throw "CLI --help failed with exit code $LASTEXITCODE"
+}
+
+& $installerExePath --help
+if ($LASTEXITCODE -ne 0) {
+  throw "Installer --help failed with exit code $LASTEXITCODE"
 }
 
 & $exePath (Join-Path $repoRoot "missing.wav")
