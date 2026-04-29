@@ -73,7 +73,7 @@ function Remove-RegistryValueIfPresent {
   }
 }
 
-Write-Warning "Development unregister removes only WavePreview HKCU registry entries."
+Write-Warning "Development unregister removes only AudioPreview HKCU registry entries."
 
 foreach ($extension in $Extensions) {
   $normalizedExtension = Normalize-Extension $extension

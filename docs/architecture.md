@@ -2,7 +2,7 @@
 
 ## 1. Vue générale
 
-WavePreview for Explorer est organisé en composants découplés :
+AudioPreview for Explorer est organisé en composants découplés :
 
 ```text
 Explorer / Preview Host

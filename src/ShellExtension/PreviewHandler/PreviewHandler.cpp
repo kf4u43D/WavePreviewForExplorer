@@ -12,6 +12,7 @@
 #include <fstream>
 #include <new>
 #include <iomanip>
+#include <limits>
 #include <mmsystem.h>
 #include <sstream>
 #include <system_error>
@@ -20,10 +21,14 @@
 
 namespace wpv::shell {
 namespace {
-constexpr wchar_t kPreviewWindowClass[] = L"WavePreviewPreviewWindow";
-constexpr wchar_t kPreviewSettingsKey[] = L"Software\\WavePreviewForExplorer\\Preview";
+constexpr wchar_t kPreviewWindowClass[] = L"AudioPreviewPreviewWindow";
+constexpr wchar_t kPreviewSettingsKey[] = L"Software\\AudioPreviewForExplorer\\Preview";
+constexpr wchar_t kLegacyPreviewSettingsKey[] = L"Software\\WavePreviewForExplorer\\Preview";
 constexpr std::uint64_t kMaxPreviewStreamBytes = 256ull * 1024ull * 1024ull;
 constexpr UINT_PTR kPlaybackTimerId = 1;
+constexpr std::uint16_t kWaveFormatPcm = 1;
+constexpr std::uint16_t kWaveFormatIeeeFloat = 3;
+constexpr std::uint16_t kWaveFormatExtensible = 0xFFFE;
 
 struct StreamMetadata {
   std::string codec;
@@ -89,13 +94,23 @@ bool readFileBytes(const std::filesystem::path& path, std::vector<unsigned char>
 bool readSettingsDword(const wchar_t* valueName, DWORD defaultValue) {
   DWORD value = defaultValue;
   DWORD valueSize = sizeof(value);
-  const auto status = RegGetValueW(HKEY_CURRENT_USER,
-                                   kPreviewSettingsKey,
-                                   valueName,
-                                   RRF_RT_REG_DWORD,
-                                   nullptr,
-                                   &value,
-                                   &valueSize);
+  auto status = RegGetValueW(HKEY_CURRENT_USER,
+                             kPreviewSettingsKey,
+                             valueName,
+                             RRF_RT_REG_DWORD,
+                             nullptr,
+                             &value,
+                             &valueSize);
+  if (status != ERROR_SUCCESS) {
+    valueSize = sizeof(value);
+    status = RegGetValueW(HKEY_CURRENT_USER,
+                          kLegacyPreviewSettingsKey,
+                          valueName,
+                          RRF_RT_REG_DWORD,
+                          nullptr,
+                          &value,
+                          &valueSize);
+  }
   if (status != ERROR_SUCCESS) return defaultValue != 0;
   return value != 0;
 }
@@ -138,6 +153,32 @@ bool hasTag(const std::vector<unsigned char>& bytes, std::size_t offset, const c
   return std::memcmp(bytes.data() + offset, tag, 4) == 0;
 }
 
+std::uint16_t readWaveFormatExtensibleSubFormat(const std::vector<unsigned char>& bytes, std::size_t fmtDataOffset, std::uint32_t fmtChunkSize) {
+  if (fmtChunkSize < 40) return 0;
+
+  std::uint16_t cbSize = 0;
+  std::uint32_t data1 = 0;
+  std::uint16_t data2 = 0;
+  std::uint16_t data3 = 0;
+  if (!readLE(bytes, fmtDataOffset + 16, cbSize) || cbSize < 22 ||
+      !readLE(bytes, fmtDataOffset + 24, data1) ||
+      !readLE(bytes, fmtDataOffset + 28, data2) ||
+      !readLE(bytes, fmtDataOffset + 30, data3)) {
+    return 0;
+  }
+
+  constexpr unsigned char expectedTail[8] = {0x80, 0x00, 0x00, 0xAA, 0x00, 0x38, 0x9B, 0x71};
+  if (fmtDataOffset + 40 > bytes.size() ||
+      data2 != 0x0000 ||
+      data3 != 0x0010 ||
+      std::memcmp(bytes.data() + fmtDataOffset + 32, expectedTail, sizeof(expectedTail)) != 0) {
+    return 0;
+  }
+
+  if (data1 == kWaveFormatPcm || data1 == kWaveFormatIeeeFloat) return static_cast<std::uint16_t>(data1);
+  return 0;
+}
+
 bool parseWavMetadataBytes(const std::vector<unsigned char>& bytes, StreamMetadata& metadata, std::string& error) {
   if (bytes.size() < 12 || !hasTag(bytes, 0, "RIFF") || !hasTag(bytes, 8, "WAVE")) {
     error = "Not RIFF/WAVE";
@@ -177,6 +218,10 @@ bool parseWavMetadataBytes(const std::vector<unsigned char>& bytes, StreamMetada
         error = "Truncated fmt chunk";
         return false;
       }
+      if (audioFormat == kWaveFormatExtensible) {
+        const auto subFormat = readWaveFormatExtensibleSubFormat(bytes, dataOffset, chunkSize);
+        if (subFormat != 0) audioFormat = subFormat;
+      }
       haveFmt = true;
     } else if (hasTag(bytes, offset, "data")) {
       dataBytes = chunkSize;
@@ -201,7 +246,7 @@ bool parseWavMetadataBytes(const std::vector<unsigned char>& bytes, StreamMetada
     return false;
   }
 
-  metadata.codec = (audioFormat == 3) ? "WAV float" : "WAV PCM";
+  metadata.codec = (audioFormat == kWaveFormatIeeeFloat) ? "WAV float" : "WAV PCM";
   metadata.sampleRate = sampleRate;
   metadata.bitDepth = bitsPerSample;
   metadata.channels = channels;
@@ -248,6 +293,92 @@ float decodeFloat32Sample(const unsigned char* bytes) {
   return std::clamp(sample, -1.0f, 1.0f);
 }
 
+template <typename T>
+void appendLE(std::vector<unsigned char>& bytes, T value) {
+  const auto raw = static_cast<std::uint64_t>(value);
+  for (std::size_t i = 0; i < sizeof(T); ++i) {
+    bytes.push_back(static_cast<unsigned char>((raw >> (i * 8u)) & 0xFFu));
+  }
+}
+
+void appendAscii(std::vector<unsigned char>& bytes, const char (&text)[5]) {
+  bytes.insert(bytes.end(), text, text + 4);
+}
+
+std::int16_t toPcm16(float sample) {
+  sample = std::clamp(sample, -1.0f, 1.0f);
+  if (sample <= -1.0f) return std::numeric_limits<std::int16_t>::min();
+  return static_cast<std::int16_t>(std::lround(sample * 32767.0f));
+}
+
+float decodeWaveSample(const std::vector<unsigned char>& bytes,
+                       const StreamMetadata& metadata,
+                       std::uint64_t frameIndex,
+                       std::uint16_t channel,
+                       std::uint16_t bytesPerSample) {
+  const auto sampleOffset = metadata.dataOffset +
+      static_cast<std::size_t>(frameIndex) * metadata.blockAlign +
+      static_cast<std::size_t>(channel) * bytesPerSample;
+  if (metadata.audioFormat == kWaveFormatIeeeFloat) {
+    return decodeFloat32Sample(bytes.data() + sampleOffset);
+  }
+  return decodePcmSample(bytes.data() + sampleOffset, metadata.bitDepth);
+}
+
+bool buildPcm16PlaybackWav(const std::vector<unsigned char>& sourceBytes, std::vector<unsigned char>& playbackBytes) {
+  playbackBytes.clear();
+
+  StreamMetadata metadata;
+  std::string error;
+  if (!parseWavMetadataBytes(sourceBytes, metadata, error)) return false;
+  if (metadata.audioFormat != kWaveFormatPcm && metadata.audioFormat != kWaveFormatIeeeFloat) return false;
+  if (metadata.bitDepth != 8 && metadata.bitDepth != 16 && metadata.bitDepth != 24 && metadata.bitDepth != 32) return false;
+  if (metadata.audioFormat == kWaveFormatIeeeFloat && metadata.bitDepth != 32) return false;
+  if (metadata.channels == 0 || metadata.blockAlign == 0 || metadata.frameCount == 0) return false;
+
+  const auto bytesPerSample = static_cast<std::uint16_t>(metadata.bitDepth / 8);
+  if (metadata.blockAlign != metadata.channels * bytesPerSample) return false;
+  if (metadata.dataOffset > sourceBytes.size() || sourceBytes.size() - metadata.dataOffset < metadata.dataBytes) return false;
+
+  const std::uint16_t outputChannels = metadata.channels == 2 ? 2 : 1;
+  const auto outputBlockAlign = static_cast<std::uint16_t>(outputChannels * sizeof(std::int16_t));
+  const auto outputByteRate = metadata.sampleRate * outputBlockAlign;
+  const auto outputDataBytes = metadata.frameCount * outputBlockAlign;
+  if (outputDataBytes > std::numeric_limits<std::uint32_t>::max()) return false;
+
+  playbackBytes.reserve(static_cast<std::size_t>(44 + outputDataBytes));
+  appendAscii(playbackBytes, "RIFF");
+  appendLE<std::uint32_t>(playbackBytes, static_cast<std::uint32_t>(36 + outputDataBytes));
+  appendAscii(playbackBytes, "WAVE");
+  appendAscii(playbackBytes, "fmt ");
+  appendLE<std::uint32_t>(playbackBytes, 16);
+  appendLE<std::uint16_t>(playbackBytes, kWaveFormatPcm);
+  appendLE<std::uint16_t>(playbackBytes, outputChannels);
+  appendLE<std::uint32_t>(playbackBytes, metadata.sampleRate);
+  appendLE<std::uint32_t>(playbackBytes, outputByteRate);
+  appendLE<std::uint16_t>(playbackBytes, outputBlockAlign);
+  appendLE<std::uint16_t>(playbackBytes, 16);
+  appendAscii(playbackBytes, "data");
+  appendLE<std::uint32_t>(playbackBytes, static_cast<std::uint32_t>(outputDataBytes));
+
+  for (std::uint64_t frameIndex = 0; frameIndex < metadata.frameCount; ++frameIndex) {
+    if (outputChannels == 2) {
+      appendLE<std::int16_t>(playbackBytes, toPcm16(decodeWaveSample(sourceBytes, metadata, frameIndex, 0, bytesPerSample)));
+      appendLE<std::int16_t>(playbackBytes, toPcm16(decodeWaveSample(sourceBytes, metadata, frameIndex, 1, bytesPerSample)));
+      continue;
+    }
+
+    float mixed = 0.0f;
+    for (std::uint16_t channel = 0; channel < metadata.channels; ++channel) {
+      mixed += decodeWaveSample(sourceBytes, metadata, frameIndex, channel, bytesPerSample);
+    }
+    mixed /= static_cast<float>(metadata.channels);
+    appendLE<std::int16_t>(playbackBytes, toPcm16(mixed));
+  }
+
+  return true;
+}
+
 bool buildWaveformFromBytes(const std::vector<unsigned char>& bytes,
                             const StreamMetadata& metadata,
                             unsigned targetPoints,
@@ -255,11 +386,11 @@ bool buildWaveformFromBytes(const std::vector<unsigned char>& bytes,
   waveform = {};
   waveform.channels = 1;
   if (targetPoints == 0 || metadata.frameCount == 0) return false;
-  if (metadata.audioFormat != 1 && metadata.audioFormat != 3) return false;
+  if (metadata.audioFormat != kWaveFormatPcm && metadata.audioFormat != kWaveFormatIeeeFloat) return false;
   if (metadata.bitDepth != 8 && metadata.bitDepth != 16 && metadata.bitDepth != 24 && metadata.bitDepth != 32) return false;
 
   const auto bytesPerSample = static_cast<std::uint16_t>(metadata.bitDepth / 8);
-  if (metadata.audioFormat == 3 && metadata.bitDepth != 32) return false;
+  if (metadata.audioFormat == kWaveFormatIeeeFloat && metadata.bitDepth != 32) return false;
   if (metadata.blockAlign != metadata.channels * bytesPerSample) return false;
   if (metadata.dataOffset > bytes.size() || bytes.size() - metadata.dataOffset < metadata.dataBytes) return false;
 
@@ -271,7 +402,7 @@ bool buildWaveformFromBytes(const std::vector<unsigned char>& bytes,
     float mixed = 0.0f;
     for (std::uint16_t channel = 0; channel < metadata.channels; ++channel) {
       const auto sampleOffset = frameOffset + static_cast<std::size_t>(channel) * bytesPerSample;
-      if (metadata.audioFormat == 3) {
+      if (metadata.audioFormat == kWaveFormatIeeeFloat) {
         mixed += decodeFloat32Sample(bytes.data() + sampleOffset);
       } else {
         mixed += decodePcmSample(bytes.data() + sampleOffset, metadata.bitDepth);
@@ -399,7 +530,10 @@ HRESULT PreviewHandler::Initialize(IStream* stream, DWORD mode) {
     BuildDisplayTextFromBytes(bytes);
     BuildWaveformFromBytes(bytes);
     if (enableAudio_) {
-      audioBytes_ = std::move(bytes);
+      if (!buildPcm16PlaybackWav(bytes, audioBytes_)) {
+        LogShellDebug(L"PreviewHandler playback conversion from stream failed");
+        audioBytes_.clear();
+      }
     }
     return S_OK;
   } catch (const std::bad_alloc&) {
@@ -653,7 +787,7 @@ void PreviewHandler::SetDisplayNameFromStream(IStream* stream) {
 
 void PreviewHandler::BuildDisplayText() {
   std::wostringstream text;
-  text << L"WavePreview\n\n";
+  text << L"AudioPreview\n\n";
 
   const auto metadata = audio::WavDecoder{}.ReadMetadata(filePath_);
   if (!metadata) {
@@ -677,7 +811,7 @@ void PreviewHandler::BuildDisplayText() {
 
 void PreviewHandler::BuildDisplayTextFromBytes(const std::vector<unsigned char>& bytes) {
   std::wostringstream text;
-  text << L"WavePreview\n\n";
+  text << L"AudioPreview\n\n";
 
   StreamMetadata metadata;
   std::string error;
@@ -752,8 +886,15 @@ void PreviewHandler::LoadAudioBytesFromFile() {
     return;
   }
 
-  if (!readFileBytes(filePath_, audioBytes_)) {
+  std::vector<unsigned char> fileBytes;
+  if (!readFileBytes(filePath_, fileBytes)) {
     LogShellDebug(L"PreviewHandler audio bytes from file failed");
+    audioBytes_.clear();
+    return;
+  }
+
+  if (!buildPcm16PlaybackWav(fileBytes, audioBytes_)) {
+    LogShellDebug(L"PreviewHandler playback conversion from file failed");
     audioBytes_.clear();
   }
 }
@@ -866,7 +1007,7 @@ void PreviewHandler::PaintHeader(HDC dc, const RECT& rect) {
   SetTextColor(dc, RGB(24, 24, 24));
   RECT titleRect = textRect;
   titleRect.bottom = titleRect.top + 26;
-  const std::wstring title = displayName_.empty() ? L"WavePreview" : displayName_;
+  const std::wstring title = displayName_.empty() ? L"AudioPreview" : displayName_;
   DrawTextW(dc, title.c_str(), static_cast<int>(title.size()), &titleRect,
             DT_LEFT | DT_TOP | DT_SINGLELINE | DT_END_ELLIPSIS);
 

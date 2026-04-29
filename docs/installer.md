@@ -1,9 +1,9 @@
-# WavePreview Installer
+# AudioPreview Installer
 
-WavePreviewInstaller.exe installs WavePreview for the current Windows user only. It does not require administrator rights because it writes HKCU registry entries and installs files under:
+AudioPreviewInstaller.exe installs AudioPreview for the current Windows user only. It does not require administrator rights because it writes HKCU registry entries and installs files under:
 
 ```text
-%LOCALAPPDATA%\WavePreviewForExplorer
+%LOCALAPPDATA%\AudioPreviewForExplorer
 ```
 
 ## Graphical Install
@@ -11,14 +11,14 @@ WavePreviewInstaller.exe installs WavePreview for the current Windows user only.
 Run:
 
 ```powershell
-.\WavePreviewInstallerGui.exe
+.\AudioPreviewInstallerGui.exe
 ```
 
 The console installer can also open the same window:
 
 ```powershell
-.\WavePreviewInstaller.exe
-.\WavePreviewInstaller.exe gui
+.\AudioPreviewInstaller.exe
+.\AudioPreviewInstaller.exe gui
 ```
 
 The installer window lets you choose:
@@ -32,34 +32,34 @@ The installer window lets you choose:
 - auto-play;
 - Space key Play/Stop.
 
-Use `Install` to copy the DLL and register Explorer integration. Use `Apply options` to change audio options after install. Use `Status` to inspect the active registration. Use `Uninstall` to remove WavePreview HKCU shell entries.
+Use `Install` to copy the DLL and register Explorer integration. Use `Apply options` to change audio options after install. Use `Status` to inspect the active registration. Use `Uninstall` to remove AudioPreview HKCU shell entries.
 
 ## Command Line
 
 Install:
 
 ```powershell
-.\WavePreviewInstaller.exe install --audio on --autoplay off --space-to-play on --restart-explorer
+.\AudioPreviewInstaller.exe install --audio on --autoplay off --space-to-play on --restart-explorer
 ```
 
 Configure:
 
 ```powershell
-.\WavePreviewInstaller.exe configure --autoplay on
-.\WavePreviewInstaller.exe configure --autoplay off
-.\WavePreviewInstaller.exe configure --reset-options
+.\AudioPreviewInstaller.exe configure --autoplay on
+.\AudioPreviewInstaller.exe configure --autoplay off
+.\AudioPreviewInstaller.exe configure --reset-options
 ```
 
 Status:
 
 ```powershell
-.\WavePreviewInstaller.exe status
+.\AudioPreviewInstaller.exe status
 ```
 
 Uninstall:
 
 ```powershell
-.\WavePreviewInstaller.exe uninstall --restart-explorer
+.\AudioPreviewInstaller.exe uninstall --restart-explorer
 ```
 
 ## Notes

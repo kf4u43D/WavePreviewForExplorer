@@ -14,7 +14,8 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$settingsKey = "Registry::HKEY_CURRENT_USER\Software\WavePreviewForExplorer\Preview"
+$settingsKey = "Registry::HKEY_CURRENT_USER\Software\AudioPreviewForExplorer\Preview"
+$legacySettingsKey = "Registry::HKEY_CURRENT_USER\Software\WavePreviewForExplorer\Preview"
 $defaults = @{
   EnableAudio = 1
   AutoPlay = 0
@@ -63,13 +64,24 @@ function Get-EffectiveOption {
       return [int]$property.$Name
     }
   }
+  if (Test-Path -LiteralPath $legacySettingsKey) {
+    $property = Get-ItemProperty -LiteralPath $legacySettingsKey -Name $Name -ErrorAction SilentlyContinue
+    if ($null -ne $property) {
+      return [int]$property.$Name
+    }
+  }
   return [int]$defaults[$Name]
 }
 
 if ($Reset) {
   if (Test-Path -LiteralPath $settingsKey) {
-    if ($PSCmdlet.ShouldProcess($settingsKey, "Remove all WavePreview preview option overrides")) {
+    if ($PSCmdlet.ShouldProcess($settingsKey, "Remove all AudioPreview preview option overrides")) {
       Remove-Item -LiteralPath $settingsKey -Recurse -Force
+    }
+  }
+  if (Test-Path -LiteralPath $legacySettingsKey) {
+    if ($PSCmdlet.ShouldProcess($legacySettingsKey, "Remove all legacy WavePreview preview option overrides")) {
+      Remove-Item -LiteralPath $legacySettingsKey -Recurse -Force
     }
   }
 } else {
@@ -78,7 +90,7 @@ if ($Reset) {
   Set-PreviewOption -Name "SpaceToPlay" -State $SpaceToPlay
 }
 
-Write-Host "WavePreview preview options:"
+Write-Host "AudioPreview preview options:"
 foreach ($name in @("EnableAudio", "AutoPlay", "SpaceToPlay")) {
   $value = Get-EffectiveOption -Name $name
   $state = if ($value -ne 0) { "On" } else { "Off" }

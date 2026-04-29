@@ -7,11 +7,13 @@ $exePath = Join-Path $outDir "waveform-test-cli.exe"
 $thumbnailExePath = Join-Path $outDir "thumbnail-smoke-cli.exe"
 $comThumbnailExePath = Join-Path $outDir "com-thumbnail-smoke-cli.exe"
 $previewExePath = Join-Path $outDir "preview-smoke-cli.exe"
-$installerExePath = Join-Path $outDir "WavePreviewInstaller.exe"
-$installerGuiExePath = Join-Path $outDir "WavePreviewInstallerGui.exe"
-$shellDllPath = Join-Path $outDir "WavePreviewShellExtension-smoke.dll"
+$installerExePath = Join-Path $outDir "AudioPreviewInstaller.exe"
+$installerGuiExePath = Join-Path $outDir "AudioPreviewInstallerGui.exe"
+$shellDllPath = Join-Path $outDir "AudioPreviewShellExtension-smoke.dll"
 $cmdPath = Join-Path $outDir "compile.cmd"
 $wavPath = Join-Path $outDir "verify-input-pcm16.wav"
+$wavPcm32Path = Join-Path $outDir "verify-input-pcm32.wav"
+$wavFloat32Path = Join-Path $outDir "verify-input-float32.wav"
 $bmpPath = Join-Path $outDir "verify-waveform.bmp"
 
 if (!(Test-Path $vsDevCmd)) {
@@ -167,6 +169,10 @@ function Write-Int16LE([System.IO.BinaryWriter]$Writer, [Int16]$Value) {
   $Writer.Write($Value)
 }
 
+function Write-Int32LE([System.IO.BinaryWriter]$Writer, [Int32]$Value) {
+  $Writer.Write($Value)
+}
+
 function Write-TestPcm16Wav([string]$Path) {
   $sampleRate = [UInt32]44100
   $channels = [UInt16]1
@@ -204,7 +210,83 @@ function Write-TestPcm16Wav([string]$Path) {
   }
 }
 
+function Write-TestPcm32Wav([string]$Path) {
+  $sampleRate = [UInt32]44100
+  $channels = [UInt16]1
+  $bitsPerSample = [UInt16]32
+  $samples = [Int32[]]([Int32]::MinValue, -1073741824, 0, 1073741824, [Int32]::MaxValue, 0)
+  $blockAlign = [UInt16]($channels * ($bitsPerSample / 8))
+  $byteRate = [UInt32]($sampleRate * $blockAlign)
+  $dataBytes = [UInt32]($samples.Length * 4)
+
+  $stream = [System.IO.File]::Open($Path, [System.IO.FileMode]::Create, [System.IO.FileAccess]::Write)
+  try {
+    $writer = [System.IO.BinaryWriter]::new($stream, [System.Text.Encoding]::ASCII, $true)
+    try {
+      $writer.Write([System.Text.Encoding]::ASCII.GetBytes("RIFF"))
+      Write-UInt32LE $writer ([UInt32](36 + $dataBytes))
+      $writer.Write([System.Text.Encoding]::ASCII.GetBytes("WAVE"))
+      $writer.Write([System.Text.Encoding]::ASCII.GetBytes("fmt "))
+      Write-UInt32LE $writer 16
+      Write-UInt16LE $writer 1
+      Write-UInt16LE $writer $channels
+      Write-UInt32LE $writer $sampleRate
+      Write-UInt32LE $writer $byteRate
+      Write-UInt16LE $writer $blockAlign
+      Write-UInt16LE $writer $bitsPerSample
+      $writer.Write([System.Text.Encoding]::ASCII.GetBytes("data"))
+      Write-UInt32LE $writer $dataBytes
+      foreach ($sample in $samples) {
+        Write-Int32LE $writer $sample
+      }
+    } finally {
+      $writer.Dispose()
+    }
+  } finally {
+    $stream.Dispose()
+  }
+}
+
+function Write-TestFloat32Wav([string]$Path) {
+  $sampleRate = [UInt32]44100
+  $channels = [UInt16]1
+  $bitsPerSample = [UInt16]32
+  $samples = [Single[]](-1.0, -0.5, 0.0, 0.5, 1.0, 0.0)
+  $blockAlign = [UInt16]($channels * ($bitsPerSample / 8))
+  $byteRate = [UInt32]($sampleRate * $blockAlign)
+  $dataBytes = [UInt32]($samples.Length * 4)
+
+  $stream = [System.IO.File]::Open($Path, [System.IO.FileMode]::Create, [System.IO.FileAccess]::Write)
+  try {
+    $writer = [System.IO.BinaryWriter]::new($stream, [System.Text.Encoding]::ASCII, $true)
+    try {
+      $writer.Write([System.Text.Encoding]::ASCII.GetBytes("RIFF"))
+      Write-UInt32LE $writer ([UInt32](36 + $dataBytes))
+      $writer.Write([System.Text.Encoding]::ASCII.GetBytes("WAVE"))
+      $writer.Write([System.Text.Encoding]::ASCII.GetBytes("fmt "))
+      Write-UInt32LE $writer 16
+      Write-UInt16LE $writer 3
+      Write-UInt16LE $writer $channels
+      Write-UInt32LE $writer $sampleRate
+      Write-UInt32LE $writer $byteRate
+      Write-UInt16LE $writer $blockAlign
+      Write-UInt16LE $writer $bitsPerSample
+      $writer.Write([System.Text.Encoding]::ASCII.GetBytes("data"))
+      Write-UInt32LE $writer $dataBytes
+      foreach ($sample in $samples) {
+        $writer.Write($sample)
+      }
+    } finally {
+      $writer.Dispose()
+    }
+  } finally {
+    $stream.Dispose()
+  }
+}
+
 Write-TestPcm16Wav $wavPath
+Write-TestPcm32Wav $wavPcm32Path
+Write-TestFloat32Wav $wavFloat32Path
 if (Test-Path $bmpPath) {
   Remove-Item -LiteralPath $bmpPath -Force
 }
@@ -233,6 +315,18 @@ if ($LASTEXITCODE -ne 0) {
 & $previewExePath $wavPath
 if ($LASTEXITCODE -ne 0) {
   throw "Preview smoke check failed with exit code $LASTEXITCODE"
+}
+
+foreach ($extraWavPath in @($wavPcm32Path, $wavFloat32Path)) {
+  & $exePath $extraWavPath --width 128 --height 64
+  if ($LASTEXITCODE -ne 0) {
+    throw "CLI 32-bit WAV check failed for $extraWavPath with exit code $LASTEXITCODE"
+  }
+
+  & $previewExePath $extraWavPath
+  if ($LASTEXITCODE -ne 0) {
+    throw "Preview 32-bit WAV smoke check failed for $extraWavPath with exit code $LASTEXITCODE"
+  }
 }
 
 Write-Host "CLI/render verification completed: $exePath"

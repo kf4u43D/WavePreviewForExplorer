@@ -1,5 +1,5 @@
 <!-- Placeholder WiX file. To be completed after the shell extension registration model is stable. -->
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
-  <Package Name="WavePreview for Explorer" Manufacturer="WavePreview" Version="0.1.0" UpgradeCode="PUT-UPGRADE-GUID-HERE">
+  <Package Name="AudioPreview for Explorer" Manufacturer="AudioPreview" Version="0.1.0" UpgradeCode="PUT-UPGRADE-GUID-HERE">
   </Package>
 </Wix>

@@ -16,10 +16,22 @@
 #include <vector>
 
 namespace {
-constexpr wchar_t kProductName[] = L"WavePreview for Explorer";
-constexpr wchar_t kInstallSubkey[] = L"Software\\WavePreviewForExplorer\\Install";
-constexpr wchar_t kPreviewOptionsSubkey[] = L"Software\\WavePreviewForExplorer\\Preview";
+constexpr wchar_t kProductName[] = L"AudioPreview for Explorer";
+constexpr wchar_t kPublisherName[] = L"AudioPreview";
+constexpr wchar_t kInstallFolderName[] = L"AudioPreviewForExplorer";
+constexpr wchar_t kShellExtensionDllName[] = L"AudioPreviewShellExtension.dll";
+constexpr wchar_t kLegacyShellExtensionDllName[] = L"WavePreviewShellExtension.dll";
+constexpr wchar_t kInstallerExeName[] = L"AudioPreviewInstaller.exe";
+constexpr wchar_t kInstallerGuiExeName[] = L"AudioPreviewInstallerGui.exe";
+constexpr wchar_t kLegacyInstallerExeName[] = L"WavePreviewInstaller.exe";
+constexpr wchar_t kLegacyInstallerGuiExeName[] = L"WavePreviewInstallerGui.exe";
+constexpr wchar_t kInstallSubkey[] = L"Software\\AudioPreviewForExplorer\\Install";
+constexpr wchar_t kLegacyInstallSubkey[] = L"Software\\WavePreviewForExplorer\\Install";
+constexpr wchar_t kPreviewOptionsSubkey[] = L"Software\\AudioPreviewForExplorer\\Preview";
+constexpr wchar_t kLegacyPreviewOptionsSubkey[] = L"Software\\WavePreviewForExplorer\\Preview";
 constexpr wchar_t kUninstallSubkey[] =
+    L"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\AudioPreviewForExplorer";
+constexpr wchar_t kLegacyUninstallSubkey[] =
     L"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\WavePreviewForExplorer";
 constexpr wchar_t kClassesRoot[] = L"Software\\Classes";
 constexpr wchar_t kApprovedSubkey[] =
@@ -122,12 +134,12 @@ std::filesystem::path defaultInstallDir() {
   PWSTR rawPath = nullptr;
   const auto hr = SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, nullptr, &rawPath);
   if (FAILED(hr) || rawPath == nullptr) {
-    return std::filesystem::temp_directory_path() / "WavePreviewForExplorer";
+    return std::filesystem::temp_directory_path() / kInstallFolderName;
   }
 
   std::filesystem::path path(rawPath);
   CoTaskMemFree(rawPath);
-  return path / "WavePreviewForExplorer";
+  return path / kInstallFolderName;
 }
 
 bool createKey(HKEY root, const std::wstring& subkey, RegistryKey& out) {
@@ -193,6 +205,18 @@ std::optional<DWORD> readDwordValue(HKEY root, const std::wstring& subkey, const
   const auto status = RegGetValueW(root, subkey.c_str(), name, RRF_RT_REG_DWORD, nullptr, &value, &bytes);
   if (status != ERROR_SUCCESS) return std::nullopt;
   return value;
+}
+
+std::optional<std::wstring> readInstallValue(const wchar_t* name) {
+  auto value = readStringValue(HKEY_CURRENT_USER, kInstallSubkey, name);
+  if (value.has_value()) return value;
+  return readStringValue(HKEY_CURRENT_USER, kLegacyInstallSubkey, name);
+}
+
+std::optional<DWORD> readPreviewOption(const wchar_t* name) {
+  auto value = readDwordValue(HKEY_CURRENT_USER, kPreviewOptionsSubkey, name);
+  if (value.has_value()) return value;
+  return readDwordValue(HKEY_CURRENT_USER, kLegacyPreviewOptionsSubkey, name);
 }
 
 void deleteTreeIfPresent(HKEY root, const std::wstring& subkey) {
@@ -265,21 +289,21 @@ std::vector<std::wstring> associationKeysForExtension(const std::wstring& extens
 
 bool registerShellProviders(const InstallerOptions& options, const std::filesystem::path& dllPath) {
   if (options.thumbnail) {
-    if (!registerComServer(kThumbnailClsid, L"WavePreview Thumbnail Provider", dllPath, std::nullopt)) return false;
+    if (!registerComServer(kThumbnailClsid, L"AudioPreview Thumbnail Provider", dllPath, std::nullopt)) return false;
   }
   if (options.preview) {
-    if (!registerComServer(kPreviewClsid, L"WavePreview Preview Handler", dllPath, std::wstring(kPrevhostAppId))) return false;
+    if (!registerComServer(kPreviewClsid, L"AudioPreview Preview Handler", dllPath, std::wstring(kPrevhostAppId))) return false;
   }
 
   RegistryKey approvedKey;
   if (!createKey(HKEY_CURRENT_USER, kApprovedSubkey, approvedKey)) return false;
-  if (options.thumbnail && !setStringValue(approvedKey.key, kThumbnailClsid, L"WavePreview Thumbnail Provider")) return false;
-  if (options.preview && !setStringValue(approvedKey.key, kPreviewClsid, L"WavePreview Preview Handler")) return false;
+  if (options.thumbnail && !setStringValue(approvedKey.key, kThumbnailClsid, L"AudioPreview Thumbnail Provider")) return false;
+  if (options.preview && !setStringValue(approvedKey.key, kPreviewClsid, L"AudioPreview Preview Handler")) return false;
 
   if (options.preview) {
     RegistryKey previewHandlersKey;
     if (!createKey(HKEY_CURRENT_USER, kPreviewHandlersSubkey, previewHandlersKey)) return false;
-    if (!setStringValue(previewHandlersKey.key, kPreviewClsid, L"WavePreview Preview Handler")) return false;
+    if (!setStringValue(previewHandlersKey.key, kPreviewClsid, L"AudioPreview Preview Handler")) return false;
   }
 
   for (const auto& extension : options.extensions) {
@@ -343,12 +367,13 @@ bool applyPreviewOptions(const InstallerOptions& options, bool installDefaults) 
 
 void removePreviewOptions() {
   deleteTreeIfPresent(HKEY_CURRENT_USER, kPreviewOptionsSubkey);
+  deleteTreeIfPresent(HKEY_CURRENT_USER, kLegacyPreviewOptionsSubkey);
 }
 
 void printPreviewOptions() {
-  const auto enableAudio = readDwordValue(HKEY_CURRENT_USER, kPreviewOptionsSubkey, L"EnableAudio").value_or(1);
-  const auto autoPlay = readDwordValue(HKEY_CURRENT_USER, kPreviewOptionsSubkey, L"AutoPlay").value_or(0);
-  const auto spaceToPlay = readDwordValue(HKEY_CURRENT_USER, kPreviewOptionsSubkey, L"SpaceToPlay").value_or(1);
+  const auto enableAudio = readPreviewOption(L"EnableAudio").value_or(1);
+  const auto autoPlay = readPreviewOption(L"AutoPlay").value_or(0);
+  const auto spaceToPlay = readPreviewOption(L"SpaceToPlay").value_or(1);
 
   std::wcout << L"Options:\n"
              << L"  EnableAudio = " << (enableAudio ? L"On" : L"Off") << L"\n"
@@ -382,14 +407,14 @@ bool writeUninstallEntry(const std::filesystem::path& installDir, const std::fil
   const auto uninstallCommand = quote(installerPath) + L" uninstall";
   return setStringValue(key.key, L"DisplayName", kProductName) &&
          setStringValue(key.key, L"DisplayVersion", L"0.1.0") &&
-         setStringValue(key.key, L"Publisher", L"WavePreview") &&
+         setStringValue(key.key, L"Publisher", kPublisherName) &&
          setStringValue(key.key, L"InstallLocation", installDir.wstring()) &&
          setStringValue(key.key, L"UninstallString", uninstallCommand) &&
          setStringValue(key.key, L"QuietUninstallString", uninstallCommand);
 }
 
 std::vector<std::wstring> installedExtensionsOrDefault() {
-  const auto value = readStringValue(HKEY_CURRENT_USER, kInstallSubkey, L"Extensions");
+  const auto value = readInstallValue(L"Extensions");
   if (!value.has_value() || value->empty()) return {L".wav", L".wave"};
 
   auto extensions = splitExtensions(value.value());
@@ -399,7 +424,7 @@ std::vector<std::wstring> installedExtensionsOrDefault() {
 
 std::filesystem::path installedDirOrDefault(const InstallerOptions& options) {
   if (!options.installDir.empty()) return options.installDir;
-  const auto value = readStringValue(HKEY_CURRENT_USER, kInstallSubkey, L"InstallDir");
+  const auto value = readInstallValue(L"InstallDir");
   if (value.has_value() && !value->empty()) return value.value();
   return defaultInstallDir();
 }
@@ -456,7 +481,33 @@ bool copyFileIfNeeded(const std::filesystem::path& source, const std::filesystem
 
 std::filesystem::path resolveSourceDll(const InstallerOptions& options) {
   if (!options.sourceDll.empty()) return options.sourceDll;
-  return modulePath().parent_path() / L"WavePreviewShellExtension.dll";
+  const auto directory = modulePath().parent_path();
+  const auto audioPreviewDll = directory / kShellExtensionDllName;
+  if (std::filesystem::exists(audioPreviewDll)) return audioPreviewDll;
+  return directory / kLegacyShellExtensionDllName;
+}
+
+std::filesystem::path resolveInstallerCliSource() {
+  const auto self = modulePath();
+  const auto directory = self.parent_path();
+  const auto audioPreviewCli = directory / kInstallerExeName;
+  if (std::filesystem::exists(audioPreviewCli)) return audioPreviewCli;
+
+  const auto legacyCli = directory / kLegacyInstallerExeName;
+  if (std::filesystem::exists(legacyCli)) return legacyCli;
+
+  return self;
+}
+
+std::optional<std::filesystem::path> resolveInstallerGuiSource() {
+  const auto directory = modulePath().parent_path();
+  const auto audioPreviewGui = directory / kInstallerGuiExeName;
+  if (std::filesystem::exists(audioPreviewGui)) return audioPreviewGui;
+
+  const auto legacyGui = directory / kLegacyInstallerGuiExeName;
+  if (std::filesystem::exists(legacyGui)) return legacyGui;
+
+  return std::nullopt;
 }
 
 void removeFileBestEffort(const std::filesystem::path& path) {
@@ -476,19 +527,22 @@ int install(const InstallerOptions& options) {
   const auto sourceDll = resolveSourceDll(options);
   if (!std::filesystem::exists(sourceDll)) {
     std::wcerr << L"Shell extension DLL not found: " << sourceDll.wstring() << L"\n"
-               << L"Pass --dll <path> or place WavePreviewShellExtension.dll next to this installer.\n";
+               << L"Pass --dll <path> or place " << kShellExtensionDllName << L" next to this installer.\n";
     return 2;
   }
 
   if (options.restartExplorer) restartShellHostsBeforeInstall();
 
   const auto installDir = options.installDir.empty() ? defaultInstallDir() : options.installDir;
-  const auto installedDll = installDir / L"WavePreviewShellExtension.dll";
-  const auto installedInstaller = installDir / L"WavePreviewInstaller.exe";
-  const auto self = modulePath();
+  const auto installedDll = installDir / kShellExtensionDllName;
+  const auto installedInstaller = installDir / kInstallerExeName;
+  const auto installedInstallerGui = installDir / kInstallerGuiExeName;
+  const auto installerCliSource = resolveInstallerCliSource();
+  const auto installerGuiSource = resolveInstallerGuiSource();
 
   if (!copyFileIfNeeded(sourceDll, installedDll)) return 1;
-  if (!copyFileIfNeeded(self, installedInstaller)) return 1;
+  if (!copyFileIfNeeded(installerCliSource, installedInstaller)) return 1;
+  if (installerGuiSource.has_value() && !copyFileIfNeeded(installerGuiSource.value(), installedInstallerGui)) return 1;
 
   unregisterShellProviders(options.extensions);
   if (!registerShellProviders(options, installedDll)) return 1;
@@ -498,7 +552,7 @@ int install(const InstallerOptions& options) {
 
   if (options.restartExplorer) startExplorer();
 
-  std::wcout << L"Installed WavePreview for Explorer to: " << installDir.wstring() << L"\n"
+  std::wcout << L"Installed AudioPreview for Explorer to: " << installDir.wstring() << L"\n"
              << L"Restart Explorer or sign out/in if shell changes are not visible yet.\n";
   printPreviewOptions();
   return 0;
@@ -524,18 +578,24 @@ int uninstall(const InstallerOptions& options) {
 
   unregisterShellProviders(extensions);
   deleteTreeIfPresent(HKEY_CURRENT_USER, kUninstallSubkey);
+  deleteTreeIfPresent(HKEY_CURRENT_USER, kLegacyUninstallSubkey);
   deleteTreeIfPresent(HKEY_CURRENT_USER, kInstallSubkey);
+  deleteTreeIfPresent(HKEY_CURRENT_USER, kLegacyInstallSubkey);
   if (!options.keepSettings) removePreviewOptions();
 
-  removeFileBestEffort(installDir / L"WavePreviewShellExtension.dll");
-  removeFileBestEffort(installDir / L"WavePreviewInstaller.exe");
+  removeFileBestEffort(installDir / kShellExtensionDllName);
+  removeFileBestEffort(installDir / kInstallerExeName);
+  removeFileBestEffort(installDir / kInstallerGuiExeName);
+  removeFileBestEffort(installDir / kLegacyShellExtensionDllName);
+  removeFileBestEffort(installDir / kLegacyInstallerExeName);
+  removeFileBestEffort(installDir / kLegacyInstallerGuiExeName);
 
   std::error_code ec;
   std::filesystem::remove(installDir, ec);
 
   if (options.restartExplorer) startExplorer();
 
-  std::wcout << L"Uninstalled WavePreview shell providers.\n";
+  std::wcout << L"Uninstalled AudioPreview shell providers.\n";
   return 0;
 }
 
@@ -549,7 +609,7 @@ int status() {
       classesSubkey(joinPathForRegistry(joinPathForRegistry(L"CLSID", kPreviewClsid), L"InprocServer32")),
       nullptr);
 
-  std::wcout << L"WavePreview installer status\n";
+  std::wcout << L"AudioPreview installer status\n";
   std::wcout << L"  Thumbnail DLL: " << (thumbnailDll.has_value() ? thumbnailDll.value() : L"(not registered)") << L"\n";
   std::wcout << L"  Preview DLL: " << (previewDll.has_value() ? previewDll.value() : L"(not registered)") << L"\n";
   printPreviewOptions();
@@ -558,14 +618,14 @@ int status() {
 
 void printUsage() {
   std::wcout
-      << L"WavePreviewInstaller.exe gui\n"
-      << L"WavePreviewInstaller.exe install [options]\n"
-      << L"WavePreviewInstaller.exe configure [options]\n"
-      << L"WavePreviewInstaller.exe uninstall [options]\n"
-      << L"WavePreviewInstaller.exe status\n\n"
+      << L"AudioPreviewInstaller.exe gui\n"
+      << L"AudioPreviewInstaller.exe install [options]\n"
+      << L"AudioPreviewInstaller.exe configure [options]\n"
+      << L"AudioPreviewInstaller.exe uninstall [options]\n"
+      << L"AudioPreviewInstaller.exe status\n\n"
       << L"Install options:\n"
       << L"  --dll <path>              Shell extension DLL to install. Defaults to DLL next to installer.\n"
-      << L"  --install-dir <path>      Defaults to %LOCALAPPDATA%\\WavePreviewForExplorer.\n"
+      << L"  --install-dir <path>      Defaults to %LOCALAPPDATA%\\AudioPreviewForExplorer.\n"
       << L"  --extensions .wav,.wave   File extensions to register.\n"
       << L"  --preview on|off          Register preview handler. Default: on.\n"
       << L"  --thumbnail on|off        Register thumbnail provider. Default: on.\n"
@@ -676,13 +736,13 @@ std::wstring installerStatusText() {
       HKEY_CURRENT_USER,
       classesSubkey(joinPathForRegistry(joinPathForRegistry(L"CLSID", kPreviewClsid), L"InprocServer32")),
       nullptr);
-  const auto installDir = readStringValue(HKEY_CURRENT_USER, kInstallSubkey, L"InstallDir");
-  const auto enableAudio = readDwordValue(HKEY_CURRENT_USER, kPreviewOptionsSubkey, L"EnableAudio").value_or(1);
-  const auto autoPlay = readDwordValue(HKEY_CURRENT_USER, kPreviewOptionsSubkey, L"AutoPlay").value_or(0);
-  const auto spaceToPlay = readDwordValue(HKEY_CURRENT_USER, kPreviewOptionsSubkey, L"SpaceToPlay").value_or(1);
+  const auto installDir = readInstallValue(L"InstallDir");
+  const auto enableAudio = readPreviewOption(L"EnableAudio").value_or(1);
+  const auto autoPlay = readPreviewOption(L"AutoPlay").value_or(0);
+  const auto spaceToPlay = readPreviewOption(L"SpaceToPlay").value_or(1);
 
   std::wostringstream out;
-  out << L"WavePreview status\r\n"
+  out << L"AudioPreview status\r\n"
       << L"Install dir: " << (installDir.has_value() ? installDir.value() : L"(not installed)") << L"\r\n"
       << L"Thumbnail DLL: " << (thumbnailDll.has_value() ? thumbnailDll.value() : L"(not registered)") << L"\r\n"
       << L"Preview DLL: " << (previewDll.has_value() ? previewDll.value() : L"(not registered)") << L"\r\n"
@@ -731,7 +791,7 @@ void chooseDll(HWND owner, GuiState& state) {
   OPENFILENAMEW ofn{};
   ofn.lStructSize = sizeof(ofn);
   ofn.hwndOwner = owner;
-  ofn.lpstrFilter = L"WavePreview DLL\0WavePreviewShellExtension.dll\0DLL files\0*.dll\0All files\0*.*\0";
+  ofn.lpstrFilter = L"AudioPreview DLL\0AudioPreviewShellExtension.dll\0DLL files\0*.dll\0All files\0*.*\0";
   ofn.lpstrFile = buffer;
   ofn.nMaxFile = MAX_PATH;
   ofn.Flags = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR;
@@ -743,7 +803,7 @@ void chooseDll(HWND owner, GuiState& state) {
 void chooseInstallDir(HWND owner, GuiState& state) {
   BROWSEINFOW browse{};
   browse.hwndOwner = owner;
-  browse.lpszTitle = L"Choose WavePreview install folder";
+  browse.lpszTitle = L"Choose AudioPreview install folder";
   browse.ulFlags = BIF_RETURNONLYFSDIRS | BIF_NEWDIALOGSTYLE;
   PIDLIST_ABSOLUTE item = SHBrowseForFolderW(&browse);
   if (item == nullptr) return;
@@ -771,7 +831,7 @@ void runGuiAction(HWND owner, GuiState& state, int controlId) {
     break;
   case IDC_UNINSTALL:
     if (MessageBoxW(owner,
-                    L"Uninstall WavePreview shell providers for the current user?",
+                    L"Uninstall AudioPreview shell providers for the current user?",
                     kProductName,
                     MB_ICONWARNING | MB_YESNO | MB_DEFBUTTON2) != IDYES) {
       return;
@@ -812,9 +872,9 @@ LRESULT CALLBACK installerWindowProc(HWND window, UINT message, WPARAM wparam, L
     if (state == nullptr) return -1;
     state->font = static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
 
-    createControl(*state, L"STATIC", L"WavePreview for Explorer", SS_LEFT, 0, -1, 16, 14, 420, 22);
+    createControl(*state, L"STATIC", L"AudioPreview for Explorer", SS_LEFT, 0, -1, 16, 14, 420, 22);
     createControl(*state, L"STATIC", L"Shell extension DLL", SS_LEFT, 0, -1, 16, 48, 140, 18);
-    state->dllPath = createControl(*state, L"EDIT", (modulePath().parent_path() / L"WavePreviewShellExtension.dll").c_str(),
+    state->dllPath = createControl(*state, L"EDIT", (modulePath().parent_path() / kShellExtensionDllName).c_str(),
                                    ES_AUTOHSCROLL, WS_EX_CLIENTEDGE, IDC_DLL_PATH, 160, 44, 360, 24);
     createControl(*state, L"BUTTON", L"Browse", BS_PUSHBUTTON, 0, IDC_BROWSE_DLL, 530, 43, 90, 26);
 
@@ -838,9 +898,9 @@ LRESULT CALLBACK installerWindowProc(HWND window, UINT message, WPARAM wparam, L
     setChecked(state->preview, true);
     setChecked(state->thumbnail, true);
     setChecked(state->restartExplorer, false);
-    setChecked(state->audio, readDwordValue(HKEY_CURRENT_USER, kPreviewOptionsSubkey, L"EnableAudio").value_or(1) != 0);
-    setChecked(state->autoPlay, readDwordValue(HKEY_CURRENT_USER, kPreviewOptionsSubkey, L"AutoPlay").value_or(0) != 0);
-    setChecked(state->spaceToPlay, readDwordValue(HKEY_CURRENT_USER, kPreviewOptionsSubkey, L"SpaceToPlay").value_or(1) != 0);
+    setChecked(state->audio, readPreviewOption(L"EnableAudio").value_or(1) != 0);
+    setChecked(state->autoPlay, readPreviewOption(L"AutoPlay").value_or(0) != 0);
+    setChecked(state->spaceToPlay, readPreviewOption(L"SpaceToPlay").value_or(1) != 0);
 
     createControl(*state, L"BUTTON", L"Install", BS_DEFPUSHBUTTON, 0, IDC_INSTALL, 16, 236, 120, 32);
     createControl(*state, L"BUTTON", L"Apply options", BS_PUSHBUTTON, 0, IDC_CONFIGURE, 148, 236, 130, 32);
@@ -885,7 +945,7 @@ LRESULT CALLBACK installerWindowProc(HWND window, UINT message, WPARAM wparam, L
 }
 
 int runGui(HINSTANCE instance) {
-  constexpr wchar_t kInstallerWindowClass[] = L"WavePreviewInstallerWindow";
+  constexpr wchar_t kInstallerWindowClass[] = L"AudioPreviewInstallerWindow";
 
   WNDCLASSEXW windowClass{};
   windowClass.cbSize = sizeof(windowClass);

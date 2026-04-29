@@ -43,7 +43,7 @@ if ($LASTEXITCODE -ne 0) {
 Write-Host "Building $Configuration"
 cmake --build $buildPathFull --config $Configuration
 if ($LASTEXITCODE -ne 0) {
-  Write-Warning "Build failed. If the error is LNK1168 on WavePreviewShellExtension.dll, Explorer or prevhost still has the shell extension loaded."
+  Write-Warning "Build failed. If the error is LNK1168 on AudioPreviewShellExtension.dll, Explorer or prevhost still has the shell extension loaded."
   Write-Warning "For the development shell extension cycle, run scripts\rebuild-register-dev.ps1 -IncludePreviewHandler so shell hosts are stopped before build."
   exit $LASTEXITCODE
 }

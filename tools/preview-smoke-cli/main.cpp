@@ -8,7 +8,7 @@
 #include <windows.h>
 
 namespace {
-constexpr wchar_t kHostWindowClass[] = L"WavePreviewPreviewSmokeHost";
+constexpr wchar_t kHostWindowClass[] = L"AudioPreviewPreviewSmokeHost";
 
 void printUsage() {
   std::wcerr << L"Usage: preview-smoke-cli <file.wav>\n";
@@ -122,7 +122,7 @@ int wmain(int argc, wchar_t** argv) {
   HWND hostWindow = CreateWindowExW(
       0,
       kHostWindowClass,
-      L"WavePreview preview smoke",
+      L"AudioPreview preview smoke",
       WS_OVERLAPPEDWINDOW,
       CW_USEDEFAULT,
       CW_USEDEFAULT,

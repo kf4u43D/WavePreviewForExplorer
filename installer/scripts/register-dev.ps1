@@ -36,18 +36,23 @@ function Resolve-DevDllPath {
   }
 
   $buildPath = if ([System.IO.Path]::IsPathRooted($BuildDir)) { $BuildDir } else { Join-Path $RepoRoot $BuildDir }
-  $candidate = Join-Path $buildPath "src\ShellExtension\$Configuration\WavePreviewShellExtension.dll"
+  $candidate = Join-Path $buildPath "src\ShellExtension\$Configuration\AudioPreviewShellExtension.dll"
   if (Test-Path -LiteralPath $candidate -PathType Leaf) {
     return [System.IO.Path]::GetFullPath($candidate)
   }
 
-  $found = Get-ChildItem -LiteralPath $buildPath -Filter WavePreviewShellExtension.dll -Recurse -ErrorAction SilentlyContinue |
+  $legacyCandidate = Join-Path $buildPath "src\ShellExtension\$Configuration\WavePreviewShellExtension.dll"
+  if (Test-Path -LiteralPath $legacyCandidate -PathType Leaf) {
+    return [System.IO.Path]::GetFullPath($legacyCandidate)
+  }
+
+  $found = Get-ChildItem -LiteralPath $buildPath -Include AudioPreviewShellExtension.dll,WavePreviewShellExtension.dll -Recurse -ErrorAction SilentlyContinue |
     Select-Object -First 1
   if ($null -ne $found) {
     return $found.FullName
   }
 
-  throw "WavePreviewShellExtension.dll not found under $buildPath. Run scripts/full-build.ps1 first or pass -DllPath."
+  throw "AudioPreviewShellExtension.dll not found under $buildPath. Run scripts/full-build.ps1 first or pass -DllPath."
 }
 
 function Set-DefaultRegistryValue {
@@ -129,18 +134,18 @@ $resolvedDllPath = Resolve-DevDllPath -ExplicitPath $DllPath -RepoRoot $repoRoot
 Write-Warning "Development registration writes HKCU only. Do not use this as a production installer."
 Write-Host "Registering shell extension DLL: $resolvedDllPath"
 
-Register-ComServer -Clsid $thumbnailClsid -Name "WavePreview Thumbnail Provider" -DllPath $resolvedDllPath
+Register-ComServer -Clsid $thumbnailClsid -Name "AudioPreview Thumbnail Provider" -DllPath $resolvedDllPath
 if ($IncludePreviewHandler) {
-  Register-ComServer -Clsid $previewClsid -Name "WavePreview Preview Handler" -DllPath $resolvedDllPath -AppId $prevhostAppId
+  Register-ComServer -Clsid $previewClsid -Name "AudioPreview Preview Handler" -DllPath $resolvedDllPath -AppId $prevhostAppId
 }
 
 if ($PSCmdlet.ShouldProcess($approvedKey, "Approve development shell extension")) {
   if (!(Test-Path -LiteralPath $approvedKey)) {
     New-Item -Path $approvedKey -Force | Out-Null
   }
-  New-ItemProperty -Path $approvedKey -Name $thumbnailClsid -Value "WavePreview Thumbnail Provider" -PropertyType String -Force | Out-Null
+  New-ItemProperty -Path $approvedKey -Name $thumbnailClsid -Value "AudioPreview Thumbnail Provider" -PropertyType String -Force | Out-Null
   if ($IncludePreviewHandler) {
-    New-ItemProperty -Path $approvedKey -Name $previewClsid -Value "WavePreview Preview Handler" -PropertyType String -Force | Out-Null
+    New-ItemProperty -Path $approvedKey -Name $previewClsid -Value "AudioPreview Preview Handler" -PropertyType String -Force | Out-Null
   }
 }
 
@@ -149,7 +154,7 @@ if ($IncludePreviewHandler) {
     if (!(Test-Path -LiteralPath $previewHandlersKey)) {
       New-Item -Path $previewHandlersKey -Force | Out-Null
     }
-    New-ItemProperty -Path $previewHandlersKey -Name $previewClsid -Value "WavePreview Preview Handler" -PropertyType String -Force | Out-Null
+    New-ItemProperty -Path $previewHandlersKey -Name $previewClsid -Value "AudioPreview Preview Handler" -PropertyType String -Force | Out-Null
   }
 }
 

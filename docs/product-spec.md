@@ -1,10 +1,10 @@
-# Spécification produit — WavePreview for Explorer
+# Spécification produit - AudioPreview for Explorer
 
 ## 1. Promesse
 
 **Voir, écouter et identifier ses fichiers audio directement dans l’Explorateur Windows, sans ouvrir de logiciel externe.**
 
-WavePreview for Explorer s’adresse aux utilisateurs qui manipulent des banques de sons, samples, field recordings, stems, exports audio, stimuli de test ou fichiers techniques. Le produit doit donner à l’Explorateur Windows une capacité de préécoute audio professionnelle, lisible et rapide.
+AudioPreview for Explorer s’adresse aux utilisateurs qui manipulent des banques de sons, samples, field recordings, stems, exports audio, stimuli de test ou fichiers techniques. Le produit doit donner à l’Explorateur Windows une capacité de préécoute audio professionnelle, lisible et rapide.
 
 ## 2. Produit
 

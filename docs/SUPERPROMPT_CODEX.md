@@ -1,6 +1,6 @@
-# Superprompt Codex — WavePreview for Explorer
+# Superprompt Codex - AudioPreview for Explorer
 
-Tu es Codex dans VS Code, chargé de développer progressivement **WavePreview for Explorer**, une extension native Windows pour préécouter et visualiser les fichiers audio directement dans l’Explorateur Windows.
+Tu es Codex dans VS Code, chargé de développer progressivement **AudioPreview for Explorer**, une extension native Windows pour préécouter et visualiser les fichiers audio directement dans l’Explorateur Windows.
 
 ## Contexte produit
 
@@ -70,7 +70,7 @@ cmake --build build --config Debug
 
 Créer un prototype compileable qui :
 
-1. construit une DLL `WavePreviewShellExtension` ;
+1. construit une DLL `AudioPreviewShellExtension` ;
 2. contient les classes COM placeholders ;
 3. expose des GUID stables dans `src/Common/Guids.h` ;
 4. compile sans enregistrer automatiquement la DLL ;

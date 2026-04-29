@@ -6,10 +6,12 @@ endfunction()
 add_executable(WavePreviewInstaller
   main.cpp
 )
+set_target_properties(WavePreviewInstaller PROPERTIES OUTPUT_NAME AudioPreviewInstaller)
 configure_wavepreview_installer(WavePreviewInstaller)
 
 add_executable(WavePreviewInstallerGui WIN32
   main.cpp
 )
 target_compile_definitions(WavePreviewInstallerGui PRIVATE WPV_INSTALLER_GUI_SUBSYSTEM)
+set_target_properties(WavePreviewInstallerGui PROPERTIES OUTPUT_NAME AudioPreviewInstallerGui)
 configure_wavepreview_installer(WavePreviewInstallerGui)

@@ -1,6 +1,6 @@
 # Plan de préparation et feuille de route
 
-Ce document rassemble les réflexions pratiques avant de transformer le starter kit WavePreview for Explorer en extension Windows réellement utilisable. L'objectif est de clarifier ce qu'il faut installer, les risques attendus, puis l'ordre de travail recommandé.
+Ce document rassemble les réflexions pratiques avant de transformer le starter kit AudioPreview for Explorer en extension Windows réellement utilisable. L'objectif est de clarifier ce qu'il faut installer, les risques attendus, puis l'ordre de travail recommandé.
 
 ## 1. Ce qu'il faut installer ou vérifier
 
@@ -351,4 +351,3 @@ Le premier chantier de code recommandé est donc :
 `src/AudioEngine/Decoders/WavDecoder.cpp`
 
 Raison : c'est testable hors Explorer, utile au CLI, nécessaire au Preview Handler et beaucoup moins risqué que de commencer par COM.
-

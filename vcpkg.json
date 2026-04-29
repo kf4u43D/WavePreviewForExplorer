@@ -1,5 +1,5 @@
 {
-  "name": "wavepreview-for-explorer",
+  "name": "audiopreview-for-explorer",
   "version-string": "0.1.0",
   "dependencies": [
     "sqlite3",

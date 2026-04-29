@@ -45,7 +45,7 @@ function Stop-ShellHosts {
     $processes = Get-Process -Name $processName -ErrorAction SilentlyContinue
     foreach ($process in $processes) {
       $target = "$($process.ProcessName) [$($process.Id)]"
-      if ($PSCmdlet.ShouldProcess($target, "Stop process to unload WavePreviewShellExtension.dll")) {
+      if ($PSCmdlet.ShouldProcess($target, "Stop process to unload AudioPreviewShellExtension.dll")) {
         Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
         Wait-Process -Id $process.Id -Timeout 5 -ErrorAction SilentlyContinue
       }
@@ -84,7 +84,7 @@ if ($IncludePreviewHandler) {
 
 Write-Warning "This development cycle can stop Explorer and prevhost so the shell extension DLL can be rebuilt."
 
-if ($PSCmdlet.ShouldProcess("WavePreview HKCU registry entries", "Unregister development shell providers")) {
+if ($PSCmdlet.ShouldProcess("AudioPreview HKCU registry entries", "Unregister development shell providers")) {
   Invoke-CheckedScript -Path $unregisterScript -Parameters $unregisterParams -Description "Unregistering development shell providers"
 }
 
@@ -92,11 +92,11 @@ if (!$NoStopShellHosts) {
   Stop-ShellHosts
 }
 
-if ($PSCmdlet.ShouldProcess($BuildDir, "Build WavePreview")) {
-  Invoke-CheckedScript -Path $fullBuildScript -Parameters $buildParams -Description "Building WavePreview"
+if ($PSCmdlet.ShouldProcess($BuildDir, "Build AudioPreview")) {
+  Invoke-CheckedScript -Path $fullBuildScript -Parameters $buildParams -Description "Building AudioPreview"
 }
 
-if ($PSCmdlet.ShouldProcess("WavePreview HKCU registry entries", "Register development shell providers")) {
+if ($PSCmdlet.ShouldProcess("AudioPreview HKCU registry entries", "Register development shell providers")) {
   Invoke-CheckedScript -Path $registerScript -Parameters $registerParams -Description "Registering development shell providers"
 }
 

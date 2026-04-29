@@ -1,13 +1,13 @@
-# WavePreview for Explorer
+# AudioPreview for Explorer
 
 [![Build](https://github.com/kf4u43D/WavePreviewForExplorer/actions/workflows/build.yml/badge.svg)](https://github.com/kf4u43D/WavePreviewForExplorer/actions/workflows/build.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-WavePreview for Explorer is a native Windows Explorer extension for browsing audio samples faster.
+AudioPreview for Explorer is a native Windows Explorer extension for browsing audio samples faster.
 
 It adds waveform thumbnails and a preview pane with playback, metadata, and a larger waveform, without opening a DAW or media player.
 
-![WavePreview running in Windows Explorer](docs/assets/explorer-preview.png)
+![AudioPreview running in Windows Explorer](docs/assets/explorer-preview.png)
 
 ## Features
 
@@ -30,25 +30,25 @@ Current stable target:
 - preview pane rendering
 - basic audio playback
 
-More formats can be added later once the shell extension path remains stable.
+The codebase is being kept format-neutral so standard formats such as AIFF, FLAC, MP3, OGG/Opus, AAC/M4A, and CAF can be added later without renaming the product again.
 
 ## Install
 
 1. Download the latest package from [Releases](https://github.com/kf4u43D/WavePreviewForExplorer/releases).
 2. Extract the zip file.
-3. Run `WavePreviewInstallerGui.exe`.
+3. Run `AudioPreviewInstallerGui.exe`.
 4. Open Windows Explorer and enable the preview pane.
 
 The installer writes only per-user registry entries under `HKCU` and installs files under:
 
 ```text
-%LOCALAPPDATA%\WavePreviewForExplorer
+%LOCALAPPDATA%\AudioPreviewForExplorer
 ```
 
 Command line install is also available:
 
 ```powershell
-.\WavePreviewInstaller.exe install --audio on --autoplay off --space-to-play on --restart-explorer
+.\AudioPreviewInstaller.exe install --audio on --autoplay off --space-to-play on --restart-explorer
 ```
 
 See [docs/installer.md](docs/installer.md) for all installer options.
@@ -93,7 +93,7 @@ powershell -ExecutionPolicy Bypass -File scripts\verify-cli-render.ps1
 
 If Explorer does not update immediately, restart Explorer or sign out and back in.
 
-If a build cannot overwrite `WavePreviewShellExtension.dll`, Explorer or `prevhost.exe` is still using it. Close Explorer windows or run:
+If a build cannot overwrite `AudioPreviewShellExtension.dll`, Explorer or `prevhost.exe` is still using it. Close Explorer windows or run:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\rebuild-register-dev.ps1 -IncludePreviewHandler
@@ -103,6 +103,6 @@ If thumbnails do not appear, check that the file extension is registered and cle
 
 ## License
 
-WavePreview for Explorer is released under the [MIT License](LICENSE).
+AudioPreview for Explorer is released under the [MIT License](LICENSE).
 
 Dependencies keep their own licenses.
