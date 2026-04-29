@@ -8,6 +8,7 @@ $thumbnailExePath = Join-Path $outDir "thumbnail-smoke-cli.exe"
 $comThumbnailExePath = Join-Path $outDir "com-thumbnail-smoke-cli.exe"
 $previewExePath = Join-Path $outDir "preview-smoke-cli.exe"
 $installerExePath = Join-Path $outDir "WavePreviewInstaller.exe"
+$installerGuiExePath = Join-Path $outDir "WavePreviewInstallerGui.exe"
 $shellDllPath = Join-Path $outDir "WavePreviewShellExtension-smoke.dll"
 $cmdPath = Join-Path $outDir "compile.cmd"
 $wavPath = Join-Path $outDir "verify-input-pcm16.wav"
@@ -94,7 +95,13 @@ cl /nologo /std:c++20 /EHsc /DUNICODE /D_UNICODE /DNOMINMAX ^
   "$repoRoot\installer\native\main.cpp" ^
   /Fo"$outDir\\" ^
   /Fe:"$installerExePath" ^
-  /link advapi32.lib shell32.lib ole32.lib
+  /link advapi32.lib shell32.lib ole32.lib user32.lib gdi32.lib comdlg32.lib
+if errorlevel 1 exit /b %errorlevel%
+cl /nologo /std:c++20 /EHsc /DUNICODE /D_UNICODE /DNOMINMAX /DWPV_INSTALLER_GUI_SUBSYSTEM ^
+  "$repoRoot\installer\native\main.cpp" ^
+  /Fo"$outDir\\" ^
+  /Fe:"$installerGuiExePath" ^
+  /link /SUBSYSTEM:WINDOWS advapi32.lib shell32.lib ole32.lib user32.lib gdi32.lib comdlg32.lib
 if errorlevel 1 exit /b %errorlevel%
 "@
 
@@ -120,6 +127,9 @@ if (!(Test-Path $shellDllPath)) {
 }
 if (!(Test-Path $installerExePath)) {
   throw "Direct MSVC compile finished but did not produce $installerExePath"
+}
+if (!(Test-Path $installerGuiExePath)) {
+  throw "Direct MSVC compile finished but did not produce $installerGuiExePath"
 }
 
 $dumpbinCommand = "call `"$vsDevCmd`" -arch=x64 >nul && dumpbin /nologo /exports `"$shellDllPath`""

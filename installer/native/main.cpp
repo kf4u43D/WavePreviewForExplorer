@@ -1,4 +1,5 @@
 #include <windows.h>
+#include <commdlg.h>
 #include <shlobj.h>
 #include <shellapi.h>
 #include <tlhelp32.h>
@@ -557,6 +558,7 @@ int status() {
 
 void printUsage() {
   std::wcout
+      << L"WavePreviewInstaller.exe gui\n"
       << L"WavePreviewInstaller.exe install [options]\n"
       << L"WavePreviewInstaller.exe configure [options]\n"
       << L"WavePreviewInstaller.exe uninstall [options]\n"
@@ -575,6 +577,357 @@ void printUsage() {
       << L"  --reset-options           configure only: remove all option overrides.\n\n"
       << L"Uninstall options:\n"
       << L"  --keep-settings           Keep HKCU preview options.\n";
+}
+
+enum InstallerControlId {
+  IDC_DLL_PATH = 1001,
+  IDC_BROWSE_DLL = 1002,
+  IDC_INSTALL_DIR = 1003,
+  IDC_BROWSE_INSTALL_DIR = 1004,
+  IDC_EXTENSIONS = 1005,
+  IDC_PREVIEW = 1006,
+  IDC_THUMBNAIL = 1007,
+  IDC_RESTART_EXPLORER = 1008,
+  IDC_AUDIO = 1009,
+  IDC_AUTOPLAY = 1010,
+  IDC_SPACE_TO_PLAY = 1011,
+  IDC_INSTALL = 1012,
+  IDC_CONFIGURE = 1013,
+  IDC_STATUS = 1014,
+  IDC_UNINSTALL = 1015,
+  IDC_STATUS_TEXT = 1016,
+};
+
+struct GuiState {
+  HWND window = nullptr;
+  HWND dllPath = nullptr;
+  HWND installDir = nullptr;
+  HWND extensions = nullptr;
+  HWND preview = nullptr;
+  HWND thumbnail = nullptr;
+  HWND restartExplorer = nullptr;
+  HWND audio = nullptr;
+  HWND autoPlay = nullptr;
+  HWND spaceToPlay = nullptr;
+  HWND statusText = nullptr;
+  HFONT font = nullptr;
+};
+
+std::wstring windowText(HWND window) {
+  const auto length = GetWindowTextLengthW(window);
+  if (length <= 0) return {};
+
+  std::wstring text(static_cast<std::size_t>(length) + 1, L'\0');
+  GetWindowTextW(window, text.data(), static_cast<int>(text.size()));
+  text.resize(static_cast<std::size_t>(length));
+  return text;
+}
+
+void setWindowText(HWND window, const std::wstring& text) {
+  SetWindowTextW(window, text.c_str());
+}
+
+bool isChecked(HWND checkbox) {
+  return SendMessageW(checkbox, BM_GETCHECK, 0, 0) == BST_CHECKED;
+}
+
+void setChecked(HWND checkbox, bool checked) {
+  SendMessageW(checkbox, BM_SETCHECK, checked ? BST_CHECKED : BST_UNCHECKED, 0);
+}
+
+HWND createControl(GuiState& state,
+                   const wchar_t* className,
+                   const wchar_t* text,
+                   DWORD style,
+                   DWORD exStyle,
+                   int id,
+                   int x,
+                   int y,
+                   int width,
+                   int height) {
+  HWND control = CreateWindowExW(exStyle,
+                                 className,
+                                 text,
+                                 WS_CHILD | WS_VISIBLE | style,
+                                 x,
+                                 y,
+                                 width,
+                                 height,
+                                 state.window,
+                                 reinterpret_cast<HMENU>(static_cast<INT_PTR>(id)),
+                                 GetModuleHandleW(nullptr),
+                                 nullptr);
+  if (control != nullptr && state.font != nullptr) {
+    SendMessageW(control, WM_SETFONT, reinterpret_cast<WPARAM>(state.font), TRUE);
+  }
+  return control;
+}
+
+std::wstring boolState(DWORD value) {
+  return value != 0 ? L"On" : L"Off";
+}
+
+std::wstring installerStatusText() {
+  const auto thumbnailDll = readStringValue(
+      HKEY_CURRENT_USER,
+      classesSubkey(joinPathForRegistry(joinPathForRegistry(L"CLSID", kThumbnailClsid), L"InprocServer32")),
+      nullptr);
+  const auto previewDll = readStringValue(
+      HKEY_CURRENT_USER,
+      classesSubkey(joinPathForRegistry(joinPathForRegistry(L"CLSID", kPreviewClsid), L"InprocServer32")),
+      nullptr);
+  const auto installDir = readStringValue(HKEY_CURRENT_USER, kInstallSubkey, L"InstallDir");
+  const auto enableAudio = readDwordValue(HKEY_CURRENT_USER, kPreviewOptionsSubkey, L"EnableAudio").value_or(1);
+  const auto autoPlay = readDwordValue(HKEY_CURRENT_USER, kPreviewOptionsSubkey, L"AutoPlay").value_or(0);
+  const auto spaceToPlay = readDwordValue(HKEY_CURRENT_USER, kPreviewOptionsSubkey, L"SpaceToPlay").value_or(1);
+
+  std::wostringstream out;
+  out << L"WavePreview status\r\n"
+      << L"Install dir: " << (installDir.has_value() ? installDir.value() : L"(not installed)") << L"\r\n"
+      << L"Thumbnail DLL: " << (thumbnailDll.has_value() ? thumbnailDll.value() : L"(not registered)") << L"\r\n"
+      << L"Preview DLL: " << (previewDll.has_value() ? previewDll.value() : L"(not registered)") << L"\r\n"
+      << L"EnableAudio: " << boolState(enableAudio) << L"\r\n"
+      << L"AutoPlay: " << boolState(autoPlay) << L"\r\n"
+      << L"SpaceToPlay: " << boolState(spaceToPlay) << L"\r\n";
+  return out.str();
+}
+
+void updateGuiStatus(GuiState& state, const std::wstring& prefix = {}) {
+  std::wstring text;
+  if (!prefix.empty()) {
+    text += prefix;
+    text += L"\r\n\r\n";
+  }
+  text += installerStatusText();
+  setWindowText(state.statusText, text);
+}
+
+OptionAction optionFromCheckbox(HWND checkbox) {
+  return isChecked(checkbox) ? OptionAction::SetOn : OptionAction::SetOff;
+}
+
+InstallerOptions optionsFromGui(const GuiState& state) {
+  InstallerOptions options;
+  options.sourceDll = windowText(state.dllPath);
+  options.installDir = windowText(state.installDir);
+  options.extensions = splitExtensions(windowText(state.extensions));
+  if (options.extensions.empty()) options.extensions = {L".wav", L".wave"};
+  options.preview = isChecked(state.preview);
+  options.thumbnail = isChecked(state.thumbnail);
+  options.restartExplorer = isChecked(state.restartExplorer);
+  options.enableAudio = optionFromCheckbox(state.audio);
+  options.autoPlay = optionFromCheckbox(state.autoPlay);
+  options.spaceToPlay = optionFromCheckbox(state.spaceToPlay);
+  return options;
+}
+
+void chooseDll(HWND owner, GuiState& state) {
+  wchar_t buffer[MAX_PATH]{};
+  const auto current = windowText(state.dllPath);
+  if (!current.empty()) {
+    wcsncpy_s(buffer, current.c_str(), _TRUNCATE);
+  }
+
+  OPENFILENAMEW ofn{};
+  ofn.lStructSize = sizeof(ofn);
+  ofn.hwndOwner = owner;
+  ofn.lpstrFilter = L"WavePreview DLL\0WavePreviewShellExtension.dll\0DLL files\0*.dll\0All files\0*.*\0";
+  ofn.lpstrFile = buffer;
+  ofn.nMaxFile = MAX_PATH;
+  ofn.Flags = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR;
+  if (GetOpenFileNameW(&ofn)) {
+    setWindowText(state.dllPath, buffer);
+  }
+}
+
+void chooseInstallDir(HWND owner, GuiState& state) {
+  BROWSEINFOW browse{};
+  browse.hwndOwner = owner;
+  browse.lpszTitle = L"Choose WavePreview install folder";
+  browse.ulFlags = BIF_RETURNONLYFSDIRS | BIF_NEWDIALOGSTYLE;
+  PIDLIST_ABSOLUTE item = SHBrowseForFolderW(&browse);
+  if (item == nullptr) return;
+
+  wchar_t path[MAX_PATH]{};
+  if (SHGetPathFromIDListW(item, path)) {
+    setWindowText(state.installDir, path);
+  }
+  CoTaskMemFree(item);
+}
+
+void runGuiAction(HWND owner, GuiState& state, int controlId) {
+  auto options = optionsFromGui(state);
+  int result = 0;
+  std::wstring okMessage;
+
+  switch (controlId) {
+  case IDC_INSTALL:
+    result = install(options);
+    okMessage = L"Installation completed.";
+    break;
+  case IDC_CONFIGURE:
+    result = configure(options);
+    okMessage = L"Options applied.";
+    break;
+  case IDC_UNINSTALL:
+    if (MessageBoxW(owner,
+                    L"Uninstall WavePreview shell providers for the current user?",
+                    kProductName,
+                    MB_ICONWARNING | MB_YESNO | MB_DEFBUTTON2) != IDYES) {
+      return;
+    }
+    result = uninstall(options);
+    okMessage = L"Uninstall completed.";
+    break;
+  case IDC_STATUS:
+    updateGuiStatus(state);
+    return;
+  default:
+    return;
+  }
+
+  if (result == 0) {
+    MessageBoxW(owner, okMessage.c_str(), kProductName, MB_OK | MB_ICONINFORMATION);
+    updateGuiStatus(state, okMessage);
+  } else {
+    std::wostringstream message;
+    message << L"Operation failed with exit code " << result << L".";
+    MessageBoxW(owner, message.str().c_str(), kProductName, MB_OK | MB_ICONERROR);
+    updateGuiStatus(state, message.str());
+  }
+}
+
+LRESULT CALLBACK installerWindowProc(HWND window, UINT message, WPARAM wparam, LPARAM lparam) {
+  if (message == WM_NCCREATE) {
+    auto* create = reinterpret_cast<CREATESTRUCTW*>(lparam);
+    auto* state = static_cast<GuiState*>(create->lpCreateParams);
+    state->window = window;
+    SetWindowLongPtrW(window, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(state));
+  }
+
+  auto* state = reinterpret_cast<GuiState*>(GetWindowLongPtrW(window, GWLP_USERDATA));
+
+  switch (message) {
+  case WM_CREATE: {
+    if (state == nullptr) return -1;
+    state->font = static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
+
+    createControl(*state, L"STATIC", L"WavePreview for Explorer", SS_LEFT, 0, -1, 16, 14, 420, 22);
+    createControl(*state, L"STATIC", L"Shell extension DLL", SS_LEFT, 0, -1, 16, 48, 140, 18);
+    state->dllPath = createControl(*state, L"EDIT", (modulePath().parent_path() / L"WavePreviewShellExtension.dll").c_str(),
+                                   ES_AUTOHSCROLL, WS_EX_CLIENTEDGE, IDC_DLL_PATH, 160, 44, 360, 24);
+    createControl(*state, L"BUTTON", L"Browse", BS_PUSHBUTTON, 0, IDC_BROWSE_DLL, 530, 43, 90, 26);
+
+    createControl(*state, L"STATIC", L"Install folder", SS_LEFT, 0, -1, 16, 82, 140, 18);
+    state->installDir = createControl(*state, L"EDIT", defaultInstallDir().c_str(),
+                                      ES_AUTOHSCROLL, WS_EX_CLIENTEDGE, IDC_INSTALL_DIR, 160, 78, 360, 24);
+    createControl(*state, L"BUTTON", L"Browse", BS_PUSHBUTTON, 0, IDC_BROWSE_INSTALL_DIR, 530, 77, 90, 26);
+
+    createControl(*state, L"STATIC", L"Extensions", SS_LEFT, 0, -1, 16, 116, 140, 18);
+    state->extensions = createControl(*state, L"EDIT", L".wav,.wave",
+                                      ES_AUTOHSCROLL, WS_EX_CLIENTEDGE, IDC_EXTENSIONS, 160, 112, 160, 24);
+
+    state->preview = createControl(*state, L"BUTTON", L"Preview handler", BS_AUTOCHECKBOX, 0, IDC_PREVIEW, 16, 154, 150, 24);
+    state->thumbnail = createControl(*state, L"BUTTON", L"Thumbnails", BS_AUTOCHECKBOX, 0, IDC_THUMBNAIL, 180, 154, 130, 24);
+    state->restartExplorer = createControl(*state, L"BUTTON", L"Restart Explorer", BS_AUTOCHECKBOX, 0, IDC_RESTART_EXPLORER, 330, 154, 170, 24);
+
+    state->audio = createControl(*state, L"BUTTON", L"Audio playback", BS_AUTOCHECKBOX, 0, IDC_AUDIO, 16, 194, 150, 24);
+    state->autoPlay = createControl(*state, L"BUTTON", L"Auto-play", BS_AUTOCHECKBOX, 0, IDC_AUTOPLAY, 180, 194, 130, 24);
+    state->spaceToPlay = createControl(*state, L"BUTTON", L"Space toggles play", BS_AUTOCHECKBOX, 0, IDC_SPACE_TO_PLAY, 330, 194, 180, 24);
+
+    setChecked(state->preview, true);
+    setChecked(state->thumbnail, true);
+    setChecked(state->restartExplorer, false);
+    setChecked(state->audio, readDwordValue(HKEY_CURRENT_USER, kPreviewOptionsSubkey, L"EnableAudio").value_or(1) != 0);
+    setChecked(state->autoPlay, readDwordValue(HKEY_CURRENT_USER, kPreviewOptionsSubkey, L"AutoPlay").value_or(0) != 0);
+    setChecked(state->spaceToPlay, readDwordValue(HKEY_CURRENT_USER, kPreviewOptionsSubkey, L"SpaceToPlay").value_or(1) != 0);
+
+    createControl(*state, L"BUTTON", L"Install", BS_DEFPUSHBUTTON, 0, IDC_INSTALL, 16, 236, 120, 32);
+    createControl(*state, L"BUTTON", L"Apply options", BS_PUSHBUTTON, 0, IDC_CONFIGURE, 148, 236, 130, 32);
+    createControl(*state, L"BUTTON", L"Status", BS_PUSHBUTTON, 0, IDC_STATUS, 290, 236, 100, 32);
+    createControl(*state, L"BUTTON", L"Uninstall", BS_PUSHBUTTON, 0, IDC_UNINSTALL, 402, 236, 120, 32);
+
+    state->statusText = createControl(*state, L"EDIT", L"", ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL | WS_VSCROLL,
+                                      WS_EX_CLIENTEDGE, IDC_STATUS_TEXT, 16, 286, 604, 154);
+    updateGuiStatus(*state);
+    return 0;
+  }
+  case WM_COMMAND:
+    if (state == nullptr) break;
+    switch (LOWORD(wparam)) {
+    case IDC_BROWSE_DLL:
+      chooseDll(window, *state);
+      return 0;
+    case IDC_BROWSE_INSTALL_DIR:
+      chooseInstallDir(window, *state);
+      return 0;
+    case IDC_INSTALL:
+    case IDC_CONFIGURE:
+    case IDC_STATUS:
+    case IDC_UNINSTALL:
+      runGuiAction(window, *state, LOWORD(wparam));
+      return 0;
+    default:
+      break;
+    }
+    break;
+  case WM_CLOSE:
+    DestroyWindow(window);
+    return 0;
+  case WM_DESTROY:
+    PostQuitMessage(0);
+    return 0;
+  default:
+    break;
+  }
+
+  return DefWindowProcW(window, message, wparam, lparam);
+}
+
+int runGui(HINSTANCE instance) {
+  constexpr wchar_t kInstallerWindowClass[] = L"WavePreviewInstallerWindow";
+
+  WNDCLASSEXW windowClass{};
+  windowClass.cbSize = sizeof(windowClass);
+  windowClass.lpfnWndProc = installerWindowProc;
+  windowClass.hInstance = instance;
+  windowClass.hCursor = LoadCursorW(nullptr, IDC_ARROW);
+  windowClass.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
+  windowClass.lpszClassName = kInstallerWindowClass;
+
+  const auto atom = RegisterClassExW(&windowClass);
+  if (atom == 0 && GetLastError() != ERROR_CLASS_ALREADY_EXISTS) {
+    MessageBoxW(nullptr, L"Could not register installer window class.", kProductName, MB_OK | MB_ICONERROR);
+    return 1;
+  }
+
+  GuiState state;
+  HWND window = CreateWindowExW(0,
+                                kInstallerWindowClass,
+                                kProductName,
+                                WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,
+                                CW_USEDEFAULT,
+                                CW_USEDEFAULT,
+                                660,
+                                500,
+                                nullptr,
+                                nullptr,
+                                instance,
+                                &state);
+  if (window == nullptr) {
+    MessageBoxW(nullptr, L"Could not create installer window.", kProductName, MB_OK | MB_ICONERROR);
+    return 1;
+  }
+
+  ShowWindow(window, SW_SHOW);
+  UpdateWindow(window);
+
+  MSG msg{};
+  while (GetMessageW(&msg, nullptr, 0, 0) > 0) {
+    TranslateMessage(&msg);
+    DispatchMessageW(&msg);
+  }
+  return static_cast<int>(msg.wParam);
 }
 
 bool requireValue(const std::vector<std::wstring>& args, std::size_t& index, const std::wstring& option) {
@@ -604,7 +957,7 @@ bool parseArgs(int argc, wchar_t** argv, InstallerOptions& options) {
   for (int i = 1; i < argc; ++i) args.emplace_back(argv[i]);
 
   if (args.empty()) {
-    options.command = L"help";
+    options.command = L"gui";
     return true;
   }
 
@@ -673,6 +1026,11 @@ bool parseArgs(int argc, wchar_t** argv, InstallerOptions& options) {
 }
 }
 
+#ifdef WPV_INSTALLER_GUI_SUBSYSTEM
+int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
+  return runGui(instance);
+}
+#else
 int wmain(int argc, wchar_t** argv) {
   InstallerOptions options;
   if (!parseArgs(argc, argv, options)) {
@@ -684,6 +1042,7 @@ int wmain(int argc, wchar_t** argv) {
     printUsage();
     return 0;
   }
+  if (options.command == L"gui") return runGui(GetModuleHandleW(nullptr));
   if (options.command == L"install") return install(options);
   if (options.command == L"configure") return configure(options);
   if (options.command == L"uninstall") return uninstall(options);
@@ -693,3 +1052,4 @@ int wmain(int argc, wchar_t** argv) {
   printUsage();
   return 2;
 }
+#endif
