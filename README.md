@@ -1,6 +1,5 @@
 # AudioPreview for Explorer
 
-[![Build](https://github.com/kf4u43D/WavePreviewForExplorer/actions/workflows/build.yml/badge.svg)](https://github.com/kf4u43D/WavePreviewForExplorer/actions/workflows/build.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 AudioPreview for Explorer is a native Windows Explorer extension for browsing audio samples faster.
