@@ -10,6 +10,9 @@ namespace wpv::audio {
 namespace {
 constexpr std::uint64_t kBmpHeaderBytes = 14u + 40u;
 constexpr std::uint64_t kMaxPixelBufferBytes = 256ull * 1024ull * 1024ull;
+constexpr std::uint8_t kWaveformBlueR = 0;
+constexpr std::uint8_t kWaveformBlueG = 120;
+constexpr std::uint8_t kWaveformBlueB = 212;
 
 void putPixel(std::vector<std::uint8_t>& pixels, unsigned width, unsigned height, unsigned x, unsigned y,
               std::uint8_t r, std::uint8_t g, std::uint8_t b) {
@@ -82,7 +85,7 @@ Result<RgbBitmap> WaveformBitmapRenderer::RenderToRgb(const WaveformData& wavefo
     auto yBottom = amplitudeToY(point.min, height);
     if (yTop > yBottom) std::swap(yTop, yBottom);
     for (auto y = yTop; y <= yBottom; ++y) {
-      putPixel(bitmap.pixels, width, height, x, y, 32, 84, 147);
+      putPixel(bitmap.pixels, width, height, x, y, kWaveformBlueR, kWaveformBlueG, kWaveformBlueB);
       if (y == yBottom) break;
     }
   }

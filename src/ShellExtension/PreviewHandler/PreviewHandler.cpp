@@ -100,6 +100,29 @@ bool readSettingsDword(const wchar_t* valueName, DWORD defaultValue) {
   return value != 0;
 }
 
+std::wstring displayNameFromPath(const std::filesystem::path& path) {
+  const auto filename = path.filename().wstring();
+  if (!filename.empty()) return filename;
+  return path.wstring();
+}
+
+std::wstring displayNameFromRawPath(const wchar_t* rawPath) {
+  if (rawPath == nullptr || rawPath[0] == L'\0') return {};
+  return displayNameFromPath(std::filesystem::path(rawPath));
+}
+
+bool readShellItemName(IShellItem* shellItem, SIGDN sigdn, std::wstring& displayName) {
+  if (shellItem == nullptr) return false;
+
+  PWSTR rawName = nullptr;
+  const auto hr = shellItem->GetDisplayName(sigdn, &rawName);
+  if (FAILED(hr) || rawName == nullptr) return false;
+
+  displayName = (sigdn == SIGDN_FILESYSPATH) ? displayNameFromRawPath(rawName) : std::wstring(rawName);
+  CoTaskMemFree(rawName);
+  return !displayName.empty();
+}
+
 template <typename T>
 bool readLE(const std::vector<unsigned char>& bytes, std::size_t offset, T& value) {
   if (offset > bytes.size() || bytes.size() - offset < sizeof(T)) return false;
@@ -332,6 +355,8 @@ HRESULT PreviewHandler::QueryInterface(REFIID riid, void** object) {
     *object = static_cast<IInitializeWithStream*>(this);
   } else if (IsEqualIID(riid, IID_IInitializeWithFile)) {
     *object = static_cast<IInitializeWithFile*>(this);
+  } else if (IsEqualIID(riid, IID_IInitializeWithItem)) {
+    *object = static_cast<IInitializeWithItem*>(this);
   } else if (IsEqualIID(riid, IID_IObjectWithSite)) {
     *object = static_cast<IObjectWithSite*>(this);
   } else if (IsEqualIID(riid, IID_IOleWindow)) {
@@ -364,6 +389,7 @@ HRESULT PreviewHandler::Initialize(IStream* stream, DWORD mode) {
 
   try {
     LoadPreviewOptions();
+    SetDisplayNameFromStream(stream);
     std::vector<unsigned char> bytes;
     if (!readStreamBytes(stream, bytes)) {
       LogShellDebug(L"PreviewHandler failed to read stream");
@@ -392,6 +418,7 @@ HRESULT PreviewHandler::Initialize(LPCWSTR filePath, DWORD mode) {
   try {
     LoadPreviewOptions();
     filePath_ = filePath;
+    SetDisplayNameFromPath(filePath_);
     initialized_ = true;
     BuildDisplayText();
     BuildWaveformFromFile();
@@ -399,6 +426,39 @@ HRESULT PreviewHandler::Initialize(LPCWSTR filePath, DWORD mode) {
       LoadAudioBytesFromFile();
     }
     return S_OK;
+  } catch (const std::bad_alloc&) {
+    return E_OUTOFMEMORY;
+  } catch (...) {
+    return E_FAIL;
+  }
+}
+
+HRESULT PreviewHandler::Initialize(IShellItem* shellItem, DWORD mode) {
+  UNREFERENCED_PARAMETER(mode);
+  LogShellDebug(L"PreviewHandler Initialize(item)");
+  if (shellItem == nullptr) return E_POINTER;
+  if (initialized_) ResetContentState();
+
+  try {
+    LoadPreviewOptions();
+    readShellItemName(shellItem, SIGDN_NORMALDISPLAY, displayName_);
+
+    std::wstring itemPath;
+    if (readShellItemName(shellItem, SIGDN_FILESYSPATH, itemPath)) {
+      filePath_ = itemPath;
+      if (displayName_.empty()) {
+        SetDisplayNameFromPath(filePath_);
+      }
+      initialized_ = true;
+      BuildDisplayText();
+      BuildWaveformFromFile();
+      if (enableAudio_) {
+        LoadAudioBytesFromFile();
+      }
+      return S_OK;
+    }
+
+    return E_FAIL;
   } catch (const std::bad_alloc&) {
     return E_OUTOFMEMORY;
   } catch (...) {
@@ -564,6 +624,7 @@ void PreviewHandler::ResetContentState() noexcept {
     std::filesystem::remove(filePath_, ec);
   }
   filePath_.clear();
+  displayName_.clear();
   displayText_.clear();
   metadata_ = {};
   hasMetadata_ = false;
@@ -573,6 +634,21 @@ void PreviewHandler::ResetContentState() noexcept {
   initialized_ = false;
   deleteFileOnDestroy_ = false;
   previewRequested_ = false;
+}
+
+void PreviewHandler::SetDisplayNameFromPath(const std::filesystem::path& path) {
+  displayName_ = displayNameFromPath(path);
+}
+
+void PreviewHandler::SetDisplayNameFromStream(IStream* stream) {
+  if (stream == nullptr) return;
+
+  STATSTG stat{};
+  if (FAILED(stream->Stat(&stat, STATFLAG_DEFAULT))) return;
+  if (stat.pwcsName != nullptr) {
+    displayName_ = displayNameFromRawPath(stat.pwcsName);
+    CoTaskMemFree(stat.pwcsName);
+  }
 }
 
 void PreviewHandler::BuildDisplayText() {
@@ -790,7 +866,9 @@ void PreviewHandler::PaintHeader(HDC dc, const RECT& rect) {
   SetTextColor(dc, RGB(24, 24, 24));
   RECT titleRect = textRect;
   titleRect.bottom = titleRect.top + 26;
-  DrawTextW(dc, L"WavePreview", -1, &titleRect, DT_LEFT | DT_TOP | DT_SINGLELINE | DT_END_ELLIPSIS);
+  const std::wstring title = displayName_.empty() ? L"WavePreview" : displayName_;
+  DrawTextW(dc, title.c_str(), static_cast<int>(title.size()), &titleRect,
+            DT_LEFT | DT_TOP | DT_SINGLELINE | DT_END_ELLIPSIS);
 
   SelectObject(dc, bodyFont);
   SetTextColor(dc, RGB(90, 90, 90));

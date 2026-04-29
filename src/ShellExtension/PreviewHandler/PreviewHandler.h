@@ -16,6 +16,7 @@ namespace wpv::shell {
 class PreviewHandler final : public IPreviewHandler,
                              public IInitializeWithStream,
                              public IInitializeWithFile,
+                             public IInitializeWithItem,
                              public IObjectWithSite,
                              public IOleWindow {
 public:
@@ -28,6 +29,7 @@ public:
 
   IFACEMETHODIMP Initialize(IStream* stream, DWORD mode) override;
   IFACEMETHODIMP Initialize(LPCWSTR filePath, DWORD mode) override;
+  IFACEMETHODIMP Initialize(IShellItem* shellItem, DWORD mode) override;
 
   IFACEMETHODIMP SetWindow(HWND parentWindow, const RECT* rect) override;
   IFACEMETHODIMP SetRect(const RECT* rect) override;
@@ -50,6 +52,8 @@ private:
   HRESULT CreatePreviewWindow();
   void DestroyPreviewWindow() noexcept;
   void ResetContentState() noexcept;
+  void SetDisplayNameFromPath(const std::filesystem::path& path);
+  void SetDisplayNameFromStream(IStream* stream);
   void BuildDisplayText();
   void BuildDisplayTextFromBytes(const std::vector<unsigned char>& bytes);
   void BuildWaveformFromFile();
@@ -69,6 +73,7 @@ private:
 
   std::atomic<ULONG> refCount_{1};
   std::filesystem::path filePath_;
+  std::wstring displayName_;
   std::wstring displayText_;
   audio::AudioMetadata metadata_;
   bool hasMetadata_ = false;

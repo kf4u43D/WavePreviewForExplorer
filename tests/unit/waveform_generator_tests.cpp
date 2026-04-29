@@ -427,9 +427,9 @@ TEST(WaveformBitmapRenderer, RendersRgbBuffer) {
   ASSERT_EQ(bitmap.value().pixels.size(), 8u * 8u * 3u);
 
   const auto centerOffset = (4u * bitmap.value().width + 0u) * 3u;
-  EXPECT_EQ(bitmap.value().pixels[centerOffset + 0], 32u);
-  EXPECT_EQ(bitmap.value().pixels[centerOffset + 1], 84u);
-  EXPECT_EQ(bitmap.value().pixels[centerOffset + 2], 147u);
+  EXPECT_EQ(bitmap.value().pixels[centerOffset + 0], 0u);
+  EXPECT_EQ(bitmap.value().pixels[centerOffset + 1], 120u);
+  EXPECT_EQ(bitmap.value().pixels[centerOffset + 2], 212u);
 }
 
 TEST(WaveformBitmapRenderer, RejectsInvalidDimensions) {
