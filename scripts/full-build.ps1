@@ -50,7 +50,7 @@ if ($LASTEXITCODE -ne 0) {
 
 if (!$NoTests) {
   Write-Host "Running tests"
-  ctest --test-dir $buildPathFull -C $Configuration --output-on-failure
+  ctest --test-dir $buildPathFull -C $Configuration --output-on-failure --no-tests=error
   if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
   }

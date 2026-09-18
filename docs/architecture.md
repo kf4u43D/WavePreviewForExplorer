@@ -1,99 +1,49 @@
 # Architecture technique
 
-## 1. Vue générale
+Le projet expose deux providers COM : un volet d'aperçu et un générateur de
+miniatures WAV. L'enregistrement est assuré par l'installateur natif, avec des
+scripts de développement utilisant le même moteur.
 
-AudioPreview for Explorer est organisé en composants découplés :
+## Décodage
 
-```text
-Explorer / Preview Host
-        |
-        v
-ShellExtension.dll
-        |
-        +--> PreviewHandler
-        +--> ThumbnailProvider
-        +--> PropertyHandler optionnel
-        |
-        v
-AudioEngine
-        |
-        +--> Decoders
-        +--> Metadata
-        +--> Waveform
-        +--> Playback
-        |
-        v
-Cache SQLite + WaveformStore
-```
+`AudioEngine/Decoders/WavDecoder` partage la validation RIFF et le décodage entre
+les entrées fichier et mémoire. Il produit métadonnées, waveform min/max et
+échantillons PCM16 pour le lecteur. Les entrées fichier sont lues par blocs.
+Les bornes des chunks, les formats et les calculs de tailles sont vérifiés avant
+l'allocation et l'accès aux échantillons. L'annulation utilise un stop_token.
 
-## 2. ShellExtension
+## Aperçu COM
 
-Composant COM natif C++.
+Initialize conserve la source sans lire ni convertir tout le fichier. DoPreview
+crée une fenêtre Win32 puis lance un travail dans le pool Windows. Les IStream
+sont transférés entre appartements COM par marshaling ; leurs lectures sont
+sérialisées pour préserver le curseur lors d'une annulation et réutilisation.
 
-Responsabilités :
+Chaque travail conserve un état indépendant et une référence au module DLL.
+Le volet récupère les résultats sur son thread via un timer. Unload demande
+l'annulation et abandonne l'état, sans attendre le worker ; aucun worker ne
+conserve de pointeur vers le volet ni de HWND. Deux travaux au plus décodent en
+parallèle. Une lecture externe déjà bloquée ne peut pas toujours être interrompue.
 
-- implémenter les interfaces COM ;
-- recevoir un fichier ou stream depuis Windows ;
-- créer une fenêtre enfant pour le Preview Handler ;
-- demander les métadonnées au moteur audio ;
-- demander un rendu waveform ;
-- ne jamais effectuer de calcul lourd en synchrone dans l’UI Explorer.
+La classe de fenêtre utilise le HINSTANCE de la DLL, empêche son déchargement
+pendant son existence et est désinscrite après fermeture de sa dernière fenêtre.
 
-## 3. AudioEngine
+## Audio et rendu
 
-Bibliothèque C++ interne.
+La conversion PCM16 est déclenchée à la demande, ou par l'auto-play. Chaque volet
+possède son périphérique waveOut et attend sa fin effective ; il libère les buffers
+après arrêt du périphérique. L'entrée et la sortie de lecture tamponnée restent
+plafonnées à 256 Mio.
 
-Responsabilités :
+Le rendu actuel utilise une bitmap RGB et GDI/Win32. Le thème sombre, la mise à
+l'échelle DPI complète et l'accessibilité du bouton dessiné restent des évolutions.
 
-- lire les métadonnées ;
-- décoder un échantillonnage simplifié ;
-- générer des points min/max pour la waveform ;
-- fournir une lecture audio simple ;
-- gérer les erreurs.
+## Cache et installation
 
-Le moteur doit être testable sans Explorer avec `tools/waveform-test-cli`.
+Le cache binaire optionnel est décrit dans [cache-format.md](cache-format.md).
+Il sert les fichiers avec un chemin stable et ignore les données invalides.
 
-## 4. Cache
-
-Deux niveaux :
-
-- SQLite pour l’index ;
-- fichiers binaires pour les données waveform.
-
-Clé de cache recommandée :
-
-```text
-canonical_path + file_size + last_write_time + partial_hash
-```
-
-Le cache ne doit pas empêcher le fonctionnement. En cas d’erreur, on recalcule ou on affiche une preview minimale.
-
-## 5. Rendu UI
-
-- Direct2D pour la waveform ;
-- Win32 pour la fenêtre du Preview Handler ;
-- WinUI 3 ou WPF plus tard pour Settings App ;
-- pas de framework lourd dans la DLL shell.
-
-## 6. Threading
-
-Règles :
-
-- UI thread uniquement pour affichage et interactions ;
-- worker thread pour lecture, analyse, cache ;
-- annulation immédiate lors du changement de fichier ;
-- timeouts courts ;
-- jamais de join bloquant depuis un callback Explorer.
-
-## 7. Robustesse
-
-Tous les fichiers doivent être considérés comme potentiellement invalides :
-
-- fichiers tronqués ;
-- headers incohérents ;
-- chemins réseau lents ;
-- disques débranchés ;
-- fichiers verrouillés ;
-- fichiers énormes.
-
-Chaque API publique interne doit retourner un `Result<T>` ou un statut explicite, pas lever des exceptions non maîtrisées au-dessus de la frontière shell.
+L'installateur conserve les valeurs antérieures des associations et leurs clés
+exactes. Il les restaure uniquement si elles appartiennent toujours à AudioPreview.
+Les tests d'installation utilisent des racines de registre isolées.
+Voir [installer.md](installer.md) et [testing-plan.md](testing-plan.md).

@@ -12,5 +12,5 @@ target_include_directories(thumbnail-smoke-cli PRIVATE
   ${PROJECT_SOURCE_DIR}/src/ShellExtension
 )
 
-target_link_libraries(thumbnail-smoke-cli PRIVATE WavePreviewAudioEngine gdi32 ole32)
+target_link_libraries(thumbnail-smoke-cli PRIVATE WavePreviewAudioEngine WavePreviewCache gdi32 ole32 shell32)
 target_compile_definitions(thumbnail-smoke-cli PRIVATE UNICODE _UNICODE NOMINMAX)

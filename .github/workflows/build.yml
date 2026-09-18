@@ -7,7 +7,10 @@ on:
 
 jobs:
   windows:
-    runs-on: windows-latest
+    runs-on: windows-2022
+    strategy:
+      matrix:
+        configuration: [Debug, Release]
     env:
       VCPKG_ROOT: ${{ github.workspace }}\vcpkg
       VCPKG_DEFAULT_TRIPLET: x64-windows
@@ -16,24 +19,26 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install CMake
-        uses: lukka/get-cmake@latest
-
-      - name: Bootstrap vcpkg
+      - name: Bootstrap pinned vcpkg
         shell: pwsh
         run: |
+          $baseline = (Get-Content vcpkg.json -Raw | ConvertFrom-Json).'builtin-baseline'
           git clone https://github.com/microsoft/vcpkg "$env:VCPKG_ROOT"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git -C "$env:VCPKG_ROOT" checkout --detach $baseline
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & "$env:VCPKG_ROOT\bootstrap-vcpkg.bat"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Configure
         shell: pwsh
         run: |
-          cmake -S . -B build -G "Visual Studio 17 2022" -A x64 "-DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake"
+          cmake -S . -B build -G "Visual Studio 17 2022" -A x64 "-DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake" -DWPV_BUILD_TESTS=ON
 
       - name: Build
         shell: pwsh
-        run: cmake --build build --config Debug
+        run: cmake --build build --config ${{ matrix.configuration }}
 
       - name: Test
         shell: pwsh
-        run: ctest --test-dir build -C Debug --output-on-failure
+        run: ctest --test-dir build -C ${{ matrix.configuration }} --output-on-failure --no-tests=error

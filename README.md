@@ -12,7 +12,9 @@ It adds waveform thumbnails and a preview pane with playback, metadata, and a la
 
 - Waveform thumbnails in Windows Explorer.
 - Preview pane with file name, codec, duration, sample rate, bit depth, channels, and frame count.
-- Play/stop button inside the preview pane.
+- Play/stop button inside the preview pane, with audio conversion on demand.
+- Background preview loading with cancellation when selection changes.
+- Optional persistent waveform cache, bounded to 512 entries and 64 MiB.
 - Optional Space key playback.
 - Optional auto-play when a file is selected.
 - Per-user installer. No administrator rights required.
@@ -24,7 +26,7 @@ This is an early Windows build focused on stable Explorer integration.
 Current stable target:
 
 - WAV / WAVE files
-- PCM WAV metadata
+- PCM 8/16/24/32-bit and IEEE float32 WAV, including supported WAVE_FORMAT_EXTENSIBLE files
 - waveform thumbnails
 - preview pane rendering
 - basic audio playback
@@ -58,7 +60,7 @@ Requirements:
 
 - Windows 10 or 11
 - Visual Studio 2022 Build Tools with C++
-- CMake
+- CMake 3.26 or newer
 - vcpkg
 
 Build and test:
@@ -105,3 +107,23 @@ If thumbnails do not appear, check that the file extension is registered and cle
 AudioPreview for Explorer is released under the [MIT License](LICENSE).
 
 Dependencies keep their own licenses.
+
+## Preview limits and validation
+
+File and stream previews share the same WAV validation and decoder. Unsupported
+encodings, inconsistent headers, truncated chunks and excessive resource requests
+produce an unavailable preview instead of being decoded.
+
+Stream input and buffered playback are limited to 256 MiB; the converted PCM16
+output has the same limit. Playback is prepared when requested (or when auto-play
+is enabled). File-based waveform analysis uses bounded buffers and supports cancellation.
+At most two preview jobs decode simultaneously.
+
+The optional waveform cache lives under
+`%USERPROFILE%\AppData\LocalLow\AudioPreviewForExplorer\Waveforms`.
+Entries are invalidated by canonical source path, size, modification time,
+resolution and cache version. Cache failures never prevent decoding.
+
+The CI runs decoder, cache, COM preview and isolated installer regression tests
+in Debug and Release. See [the test plan](docs/testing-plan.md) for the remaining
+manual Explorer checks.

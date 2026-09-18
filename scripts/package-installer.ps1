@@ -99,4 +99,6 @@ This package registers HKCU per-user shell extension entries and installs files 
 Set-Content -Path (Join-Path $outputPathFull "README-install.txt") -Value $readme -Encoding ASCII
 Copy-Item -LiteralPath (Join-Path $repoRootFull "docs\installer.md") -Destination (Join-Path $outputPathFull "installer.md") -Force
 
+Copy-Item -LiteralPath (Join-Path $repoRootFull "LICENSE") -Destination (Join-Path $outputPathFull "LICENSE") -Force
+
 Write-Host "Installer package created: $outputPathFull"

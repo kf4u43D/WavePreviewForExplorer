@@ -5,6 +5,8 @@
 #include "Render/WaveformBitmapRenderer.h"
 #include "ShellLogging.h"
 #include "ShellStreamUtils.h"
+#include "ShellCacheUtils.h"
+#include "WaveformStore/WaveformStore.h"
 #include <algorithm>
 #include <new>
 #include <system_error>
@@ -125,7 +127,12 @@ Result<HBITMAP> ThumbnailProvider::RenderThumbnailForFile(const std::filesystem:
   if (sizePixels == 0) return Result<HBITMAP>::Error("Invalid thumbnail size");
 
   const auto targetPoints = std::clamp(sizePixels, 32u, 2048u);
-  const auto waveform = audio::WavDecoder{}.ReadWaveformPreview(path, targetPoints);
+  const auto cacheRoot = WaveformCacheDirectory();
+  cache::WaveformStore store(cacheRoot);
+  const auto cached = cacheRoot.empty() ? std::nullopt : store.Load(path, targetPoints);
+  const auto waveform = cached ? Result<audio::WaveformData>::Ok(*cached)
+                              : audio::WavDecoder{}.ReadWaveformPreview(path, targetPoints);
+  if (waveform && !cached && !cacheRoot.empty()) store.Save(path, targetPoints, waveform.value());
   if (!waveform) return Result<HBITMAP>::Error(waveform.error());
 
   const auto height = std::max(32u, sizePixels / 2u);

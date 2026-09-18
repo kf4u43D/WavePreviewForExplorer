@@ -1,8 +1,16 @@
+param([string]$OutputDir)
+
 $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $vsDevCmd = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat"
-$outDir = Join-Path $repoRoot "build\verify-cli-render"
+$outDir = if ([string]::IsNullOrWhiteSpace($OutputDir)) {
+  Join-Path $repoRoot "build\verify-cli-render"
+} elseif ([System.IO.Path]::IsPathRooted($OutputDir)) {
+  $OutputDir
+} else {
+  Join-Path $repoRoot $OutputDir
+}
 $exePath = Join-Path $outDir "waveform-test-cli.exe"
 $thumbnailExePath = Join-Path $outDir "thumbnail-smoke-cli.exe"
 $comThumbnailExePath = Join-Path $outDir "com-thumbnail-smoke-cli.exe"
@@ -26,6 +34,7 @@ $compileCommand = @"
 @echo off
 call "$vsDevCmd" -arch=x64 >nul
 cl /nologo /std:c++20 /EHsc ^
+  /I "$repoRoot\src\Cache" ^
   /I "$repoRoot\src\AudioEngine" ^
   /I "$repoRoot\src\Common" ^
   "$repoRoot\tools\waveform-test-cli\main.cpp" ^
@@ -35,6 +44,7 @@ cl /nologo /std:c++20 /EHsc ^
   /Fe:"$exePath"
 if errorlevel 1 exit /b %errorlevel%
 cl /nologo /std:c++20 /EHsc /DUNICODE /D_UNICODE /DNOMINMAX ^
+  /I "$repoRoot\src\Cache" ^
   /I "$repoRoot\src\AudioEngine" ^
   /I "$repoRoot\src\Common" ^
   /I "$repoRoot\src\ShellExtension" ^
@@ -43,11 +53,12 @@ cl /nologo /std:c++20 /EHsc /DUNICODE /D_UNICODE /DNOMINMAX ^
   "$repoRoot\src\ShellExtension\ShellStreamUtils.cpp" ^
   "$repoRoot\src\ShellExtension\ThumbnailProvider\BitmapConversion.cpp" ^
   "$repoRoot\src\ShellExtension\ThumbnailProvider\ThumbnailProvider.cpp" ^
+  "$repoRoot\src\Cache\WaveformStore\WaveformStore.cpp" ^
   "$repoRoot\src\AudioEngine\Decoders\WavDecoder.cpp" ^
   "$repoRoot\src\AudioEngine\Render\WaveformBitmapRenderer.cpp" ^
   /Fo"$outDir\\" ^
   /Fe:"$thumbnailExePath" ^
-  /link gdi32.lib ole32.lib
+  /link gdi32.lib ole32.lib shell32.lib
 if errorlevel 1 exit /b %errorlevel%
 cl /nologo /std:c++20 /EHsc /DUNICODE /D_UNICODE /DNOMINMAX ^
   /I "$repoRoot\src\Common" ^
@@ -57,6 +68,7 @@ cl /nologo /std:c++20 /EHsc /DUNICODE /D_UNICODE /DNOMINMAX ^
   /link ole32.lib gdi32.lib
 if errorlevel 1 exit /b %errorlevel%
 cl /nologo /std:c++20 /EHsc /DUNICODE /D_UNICODE /DNOMINMAX ^
+  /I "$repoRoot\src\Cache" ^
   /I "$repoRoot\src\AudioEngine" ^
   /I "$repoRoot\src\Common" ^
   /I "$repoRoot\src\ShellExtension" ^
@@ -64,13 +76,15 @@ cl /nologo /std:c++20 /EHsc /DUNICODE /D_UNICODE /DNOMINMAX ^
   "$repoRoot\src\ShellExtension\ComModule.cpp" ^
   "$repoRoot\src\ShellExtension\ShellStreamUtils.cpp" ^
   "$repoRoot\src\ShellExtension\PreviewHandler\PreviewHandler.cpp" ^
+  "$repoRoot\src\Cache\WaveformStore\WaveformStore.cpp" ^
   "$repoRoot\src\AudioEngine\Decoders\WavDecoder.cpp" ^
   "$repoRoot\src\AudioEngine\Render\WaveformBitmapRenderer.cpp" ^
   /Fo"$outDir\\" ^
   /Fe:"$previewExePath" ^
-  /link ole32.lib user32.lib gdi32.lib winmm.lib advapi32.lib
+  /link ole32.lib user32.lib gdi32.lib winmm.lib advapi32.lib shell32.lib
 if errorlevel 1 exit /b %errorlevel%
 cl /nologo /std:c++20 /EHsc /DUNICODE /D_UNICODE /DNOMINMAX ^
+  /I "$repoRoot\src\Cache" ^
   /I "$repoRoot\src\AudioEngine" ^
   /I "$repoRoot\src\Common" ^
   /I "$repoRoot\src\ShellExtension" ^
@@ -78,6 +92,7 @@ cl /nologo /std:c++20 /EHsc /DUNICODE /D_UNICODE /DNOMINMAX ^
   /Fo"$outDir\DllMain.obj"
 if errorlevel 1 exit /b %errorlevel%
 cl /nologo /LD /std:c++20 /EHsc /DUNICODE /D_UNICODE /DNOMINMAX ^
+  /I "$repoRoot\src\Cache" ^
   /I "$repoRoot\src\AudioEngine" ^
   /I "$repoRoot\src\Common" ^
   /I "$repoRoot\src\ShellExtension" ^
@@ -85,13 +100,14 @@ cl /nologo /LD /std:c++20 /EHsc /DUNICODE /D_UNICODE /DNOMINMAX ^
   "$repoRoot\src\ShellExtension\ComModule.cpp" ^
   "$repoRoot\src\ShellExtension\ShellStreamUtils.cpp" ^
   "$repoRoot\src\ShellExtension\PreviewHandler\PreviewHandler.cpp" ^
+  "$repoRoot\src\Cache\WaveformStore\WaveformStore.cpp" ^
   "$repoRoot\src\ShellExtension\ThumbnailProvider\BitmapConversion.cpp" ^
   "$repoRoot\src\ShellExtension\ThumbnailProvider\ThumbnailProvider.cpp" ^
   "$repoRoot\src\AudioEngine\Decoders\WavDecoder.cpp" ^
   "$repoRoot\src\AudioEngine\Render\WaveformBitmapRenderer.cpp" ^
   /Fo"$outDir\\" ^
   /Fe:"$shellDllPath" ^
-  /link /DEF:"$repoRoot\src\ShellExtension\WavePreviewShellExtension.def" ole32.lib user32.lib gdi32.lib winmm.lib advapi32.lib
+  /link /DEF:"$repoRoot\src\ShellExtension\WavePreviewShellExtension.def" ole32.lib user32.lib gdi32.lib winmm.lib advapi32.lib shell32.lib
 if errorlevel 1 exit /b %errorlevel%
 cl /nologo /std:c++20 /EHsc /DUNICODE /D_UNICODE /DNOMINMAX ^
   "$repoRoot\installer\native\main.cpp" ^

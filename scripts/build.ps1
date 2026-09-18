@@ -20,7 +20,7 @@ if ($VerifyCliRenderOnFailure) {
   if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
   }
-  exit 0
+  exit $buildExitCode
 }
 
 Write-Host "For the current CLI/render workstream, run:" -ForegroundColor Yellow

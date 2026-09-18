@@ -70,6 +70,8 @@ if ($NoTests) {
 }
 
 $unregisterParams = @{
+  BuildDir = $BuildDir
+  Configuration = $Configuration
   Extensions = $Extensions
 }
 
@@ -88,6 +90,7 @@ if ($PSCmdlet.ShouldProcess("AudioPreview HKCU registry entries", "Unregister de
   Invoke-CheckedScript -Path $unregisterScript -Parameters $unregisterParams -Description "Unregistering development shell providers"
 }
 
+try {
 if (!$NoStopShellHosts) {
   Stop-ShellHosts
 }
@@ -100,10 +103,13 @@ if ($PSCmdlet.ShouldProcess("AudioPreview HKCU registry entries", "Register deve
   Invoke-CheckedScript -Path $registerScript -Parameters $registerParams -Description "Registering development shell providers"
 }
 
+} finally {
 if (!$NoRestartExplorer) {
   if ($PSCmdlet.ShouldProcess("explorer.exe", "Start Explorer")) {
     Start-Process explorer.exe
   }
+}
+
 }
 
 Write-Host "Development rebuild/register cycle completed."

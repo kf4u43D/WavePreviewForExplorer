@@ -109,6 +109,9 @@ void printHr(const char* label, HRESULT hr) {
 }
 
 int wmain(int argc, wchar_t** argv) {
+  const auto comHr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+  if (FAILED(comHr)) return 1;
+  struct ComScope { ~ComScope() { CoUninitialize(); } } comScope;
   if (argc != 2) {
     printUsage();
     return 2;
